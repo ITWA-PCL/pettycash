@@ -8,6 +8,7 @@
 - งานต่อไปทำที่ D:\Python\pettycash-process-flow (origin https://github.com/ITWA-PCL/pettycash, branch process-flow) สำเนาเดิม D:\petty-cash ไม่ได้เปลี่ยน branch หรือ remote ไม่ใช้แนวทาง push main อัตโนมัติของ repo เดิมกับ repo ใหม่นี้
 - นำเข้าเฉพาะไฟล์ที่ commit bc290bb ไม่รวมประวัติ Git เก่า .env ฐานข้อมูลหรือไฟล์แนบจริง เก็บวันที่/ผลตรวจเก่าในบันทึกไว้เป็นประวัติ ข้อ 2 นำเข้า Excel Budget ยังพักและรอผู้ใช้ UAT ข้อ 1/3–7 ตามเดิม
 - ตรวจโค้ดจาก repo ใหม่ใน container ชั่วคราวครบ 306 tests ผ่านทั้งหมดบน test DB แยก ไม่รันทดสอบบนข้อมูลจริงและไม่ส่ง Telegram จริง
+- เปิด PR #1 สำเร็จ https://github.com/ITWA-PCL/pettycash/pull/1 (process-flow → main), ฐานโค้ด 4e238a7 รอเจ้าของโครงการกับโก้ตรวจ ไม่มีการ merge/deploy ตัวเชื่อมต่อ GitHub สร้าง PR ถูก 403 จึงใช้ Git credential เดิมของเครื่องเปิดผ่าน API โดยไม่เผยหรือบันทึก token
 
 ## ปิดงาน 30 ตุลาคม 2026 — รอผู้ใช้ไล่เทสข้อใหม่ครั้งหน้า
 

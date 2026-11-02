@@ -8,6 +8,8 @@
 - โฟลเดอร์พัฒนาของ repo ใหม่คือ D:\Python\pettycash-process-flow, origin เป็น ITWA-PCL/pettycash, branch process-flow สำเนาเดิม D:\petty-cash ยังอยู่ครบและไม่ได้สลับ remote/branch เพื่อไม่กระทบระบบเดิมที่อ้างอิงโฟลเดอร์นั้น
 - ตั้งต้นจากไฟล์ที่ commit bc290bb ของ repo เดิมบนประวัติ 084fd57 ของ repo ใหม่ ไม่รวมประวัติ Git เดิม .env ฐานข้อมูล ไฟล์แนบ หรือ runtime data เพิ่มเอกสารขอบเขตการทำงานและคำอธิบาย PR ใน README เท่านั้น ไม่แก้ Flow หรือ Security เพิ่มในงานย้ายนี้
 - ทดสอบโค้ดจากโฟลเดอร์ repo ใหม่ผ่าน container ชั่วคราว 306 เคสผ่านทั้งหมดบนฐานทดสอบ PostgreSQL แยก ปิด Telegram token/group สำหรับรอบนี้ ไม่เริ่มเว็บใหม่หรือทำ migration กับข้อมูลจริง
+- เปิด PR #1 แล้ว: https://github.com/ITWA-PCL/pettycash/pull/1 จาก process-flow → main ฐานโค้ด commit 4e238a7 รอเจ้าของโครงการกับโก้ตรวจ ยังไม่ได้ merge/deploy และ main/security คงอยู่ที่ฐานเดิม
+- ตัวเชื่อมต่อ GitHub สร้าง PR ถูก 403 Resource not accessible by integration จึงใช้ Git credential ของเครื่อง (บัญชี Thanaphat14-wa ที่ push branch นี้ได้) เปิด PR ผ่าน API สำเร็จ ไม่แสดงหรือเก็บ token ในไฟล์
 - ข้อ 1 และ 3–7 หลังเดโม่อยู่ในฐานโค้ดนี้แล้ว ข้อ 2 นำเข้า Excel Budget ยังพัก ผู้ใช้ยังไม่ได้ทำ UAT ชุดใหม่ ไม่ถือว่าการย้าย repo หรือผล automated tests เป็นการผ่าน UAT
 
 ## ปิดงาน 30 ตุลาคม 2026 — หยุดวันนี้ รอผู้ใช้เริ่มเทสรอบถัดไป
