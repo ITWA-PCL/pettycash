@@ -1,0 +1,58 @@
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    env_file: .env
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  log-cleanup:
+    build: .
+    command: >
+      sh -c 'while true; do python manage.py cleanup_expired_logs; sleep 86400; done'
+    env_file: .env
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  daily-reminders:
+    build: .
+    command: >
+      sh -c 'while true; do python manage.py auto_confirm_receipts; python manage.py send_daily_pending_reminders --if-due; sleep 300; done'
+    env_file: .env
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-petty_cash}
+      POSTGRES_USER: ${POSTGRES_USER:-petty_cash}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-petty_cash}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  postgres_data:

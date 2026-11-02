@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}ศูนย์ผู้ดูแล | Petty Cash{% endblock %}
+{% block content %}
+<section class="dashboard-header"><div><span class="eyebrow">ผู้ดูแลระบบ</span><h1>ศูนย์ควบคุมระบบ</h1><p class="muted">ตรวจสถานะ แก้สายอนุมัติ และติดตามการเปลี่ยนแปลง</p></div></section>
+<section class="card user-form-card"><h2>สถานะระบบ</h2><div class="detail-grid"><div><dt>ฐานข้อมูล</dt><dd>{% if database_ok %}พร้อมใช้งาน{% else %}เชื่อมต่อไม่ได้{% endif %}<form method="post"><input type="hidden" name="action" value="database">{% csrf_token %}<button class="button button-secondary button-compact" type="submit">ทดสอบ</button></form></div><div><dt>Active Directory</dt><dd>{% if configuration.ad_enabled %}เปิดใช้งาน{% else %}ปิดใช้งาน{% endif %}<form method="post"><input type="hidden" name="action" value="ad">{% csrf_token %}<button class="button button-secondary button-compact" type="submit">ทดสอบ Gateway</button></form></div><div><dt>Telegram</dt><dd>{% if configuration.telegram_enabled %}เปิดใช้งาน{% else %}ปิดใช้งาน{% endif %}<form method="post"><input type="hidden" name="action" value="telegram">{% csrf_token %}<button class="button button-secondary button-compact" type="submit">ทดสอบ Bot</button></form></div><div><dt>Webhook</dt><dd>{% if configuration.telegram_enabled %}พร้อมใช้งาน{% else %}ปิดใช้งาน{% endif %}<form method="post"><input type="hidden" name="action" value="telegram_webhook">{% csrf_token %}<button class="button button-secondary button-compact" type="submit">ตรวจสอบ Webhook</button></form></div></div></section>
+<section class="card approval-check-card">
+  <div class="approval-check-heading"><div><h2>ตรวจสอบสายอนุมัติ</h2><p class="muted">ตรวจผู้อนุมัติ ผู้จัดการบัญชี และผู้จ่ายเงินของผู้ขอเบิกที่เปิดใช้งาน</p></div><span class="approval-check-count{% if not incomplete_users %} is-complete{% endif %}">{% if incomplete_users %}ต้องแก้ไข {{ incomplete_users|length }} คน{% else %}ครบแล้ว{% endif %}</span></div>
+  <p class="approval-check-note">CFO ใช้ผู้ที่กำหนดในการตั้งค่าระบบ ไม่ต้องกำหนดผู้บริหารตามสายแบบเดิม</p>
+  {% if incomplete_users %}<ul class="approval-check-list">
+    {% for item in incomplete_users %}<li class="approval-check-row">
+      <div class="approval-check-user"><strong>{{ item.user.get_full_name|default:item.user.username }}</strong>{% if item.user.get_full_name %}<small>{{ item.user.username }}</small>{% endif %}<small>แผนก {{ item.user.department|default:"ยังไม่ระบุ" }}</small></div>
+      <div class="approval-check-issues"><small>รายการที่ต้องแก้ไข</small><div>{% for field in item.missing_fields %}<span class="approval-check-badge">{{ field }}</span>{% endfor %}</div></div>
+      <a class="button button-secondary button-compact" href="{% url 'user_edit' item.user.id %}">แก้ไขสายอนุมัติ</a>
+    </li>{% endfor %}
+  </ul>{% else %}<div class="approval-check-empty"><span aria-hidden="true">✓</span><div><strong>สายอนุมัติผู้ใช้ครบแล้ว</strong><p>ไม่พบผู้ขอเบิกที่ต้องแก้ไขสายอนุมัติ</p></div></div>{% endif %}
+</section>
+<section class="card user-list-card" id="audit-log">
+  <div class="status-overview-heading"><div><span class="eyebrow">AUDIT LOG</span><h2>ประวัติการใช้งาน</h2></div></div>
+  <form class="table-filters audit-filters" method="get" action="{% url 'admin_operations' %}#audit-log">
+    <div class="table-filter-field table-filter-search"><label>ค้นหา</label><input name="audit_q" value="{{ audit_query }}" placeholder="เหตุการณ์, รายการ, ผู้ดำเนินการ"></div>
+    <div class="table-filter-field"><label>เหตุการณ์</label><div class="audit-search-select" data-search-select><input type="hidden" name="audit_action" value="{{ audit_action }}"><button class="audit-search-select-trigger" type="button" aria-expanded="false"><span data-select-label>{% if audit_action %}{% for action in audit_actions %}{% if audit_action == action.code %}{{ action.label }}{% endif %}{% endfor %}{% else %}ทั้งหมด{% endif %}</span></button><div class="audit-search-select-panel" hidden><input class="audit-select-search" type="search" placeholder="พิมพ์ค้นหาเหตุการณ์" autocomplete="off"><div class="audit-select-options"><button type="button" data-value="">ทั้งหมด</button>{% for action in audit_actions %}<button type="button" data-value="{{ action.code }}">{{ action.label }}</button>{% endfor %}<p class="audit-select-empty" hidden>ไม่พบเหตุการณ์</p></div></div></div></div>
+    <div class="table-filter-field"><label>ผู้ดำเนินการ</label><div class="audit-search-select" data-search-select><input type="hidden" name="audit_actor" value="{{ audit_actor }}"><button class="audit-search-select-trigger" type="button" aria-expanded="false"><span data-select-label>{% if audit_actor %}{% for actor in audit_actors %}{% if audit_actor == actor.username %}{{ actor.get_full_name|default:actor.username }}{% endif %}{% endfor %}{% else %}ทั้งหมด{% endif %}</span></button><div class="audit-search-select-panel" hidden><input class="audit-select-search" type="search" placeholder="พิมพ์ค้นหาผู้ดำเนินการ" autocomplete="off"><div class="audit-select-options"><button type="button" data-value="">ทั้งหมด</button>{% for actor in audit_actors %}<button type="button" data-value="{{ actor.username }}">{{ actor.get_full_name|default:actor.username }}</button>{% endfor %}<p class="audit-select-empty" hidden>ไม่พบผู้ดำเนินการ</p></div></div></div></div>
+    <div class="table-filter-field"><label>ตั้งแต่วันที่</label><input type="date" name="audit_date_from" value="{{ audit_date_from }}"></div>
+    <div class="table-filter-field"><label>ถึงวันที่</label><input type="date" name="audit_date_to" value="{{ audit_date_to }}"></div>
+    <div class="table-filter-actions"><button class="button button-primary" type="submit">ค้นหา</button><a class="button button-secondary" href="{% url 'admin_operations' %}#audit-log">ล้าง</a></div>
+  </form>
+  <div class="user-table-wrap"><table class="user-table"><thead><tr><th>วันเวลา</th><th>เหตุการณ์</th><th>รายการ</th><th>ผู้ดำเนินการ</th><th>รายละเอียด</th></tr></thead><tbody>{% for log in audit_logs %}<tr><td>{{ log.created_at|date:"d/m/Y H:i" }}</td><td><strong>{{ log.label }}</strong></td><td>{{ log.target|default:"-" }}</td><td>{{ log.actor.username|default:"ระบบ" }}</td><td>{{ log.detail|default:"-" }}</td></tr>{% empty %}<tr><td colspan="5" class="empty-table">ไม่พบประวัติที่ตรงกับเงื่อนไข</td></tr>{% endfor %}</tbody></table></div>{% include "components/table_pagination.html" %}
+</section>
+<script>
+  (() => {
+    const close = (select) => { select.classList.remove('is-open'); select.querySelector('.audit-search-select-trigger').setAttribute('aria-expanded', 'false'); select.querySelector('.audit-search-select-panel').hidden = true; };
+    if (!window.__auditSearchSelectOutsideBound) {
+      window.__auditSearchSelectOutsideBound = true;
+      document.addEventListener('click', (event) => document.querySelectorAll('[data-search-select].is-open').forEach((select) => { if (!select.contains(event.target)) close(select); }));
+    }
+    document.querySelectorAll('[data-search-select]').forEach((select) => {
+      const hidden = select.querySelector('input[type="hidden"]');
+      const trigger = select.querySelector('.audit-search-select-trigger');
+      const panel = select.querySelector('.audit-search-select-panel');
+      const search = select.querySelector('.audit-select-search');
+      const options = [...select.querySelectorAll('[data-value]')];
+      const empty = select.querySelector('.audit-select-empty');
+      options.forEach((option) => option.classList.toggle('is-selected', option.dataset.value === hidden.value));
+      const filter = () => {
+        const query = search.value.trim().toLocaleLowerCase(); let shown = 0;
+        options.forEach((option) => { const matches = option.textContent.trim().toLocaleLowerCase().includes(query); option.hidden = !matches; if (matches) shown += 1; });
+        empty.hidden = shown !== 0;
+      };
+      trigger.addEventListener('click', () => {
+        const opening = !select.classList.contains('is-open');
+        document.querySelectorAll('[data-search-select].is-open').forEach(close);
+        if (!opening) return;
+        select.classList.add('is-open'); trigger.setAttribute('aria-expanded', 'true'); panel.hidden = false; search.value = ''; filter(); search.focus();
+      });
+      search.addEventListener('input', filter);
+      search.addEventListener('keydown', (event) => { if (event.key === 'Escape') { close(select); trigger.focus(); } });
+      options.forEach((option) => option.addEventListener('click', () => {
+        hidden.value = option.dataset.value; select.querySelector('[data-select-label]').textContent = option.textContent.trim(); options.forEach((item) => item.classList.toggle('is-selected', item === option)); close(select);
+      }));
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} | Petty Cash{% endblock %}
+
+{% block content %}
+  <section class="dashboard-header"><div><span class="eyebrow">ตั้งค่าระบบ</span><h1>{{ page_title }}</h1><p class="muted">กำหนดข้อมูลและสิทธิ์ให้ผู้ใช้</p></div><a class="button button-secondary" href="{% url 'user_list' %}">กลับไปรายชื่อ</a></section>
+  <form method="post" class="user-form">{% csrf_token %}
+    <section class="card user-form-card"><h2>ผู้จ่ายเมื่อเจ้าหน้าที่บัญชีเบิกเอง</h2><div class="form-field"><label for="{{ form.alternate_payer.id_for_label }}">{{ form.alternate_payer.label }}</label>{{ form.alternate_payer }}<small>เลือกเจ้าหน้าที่บัญชีอีกคนเพื่อจ่ายเงินแทนเมื่อผู้ใช้นี้เบิกเอง ทั้งเงินครั้งแรกและส่วนต่าง หากไม่เลือกจะใช้เจ้าหน้าที่บัญชีที่ผูกไว้ซึ่งต้องไม่ใช่ตนเอง</small>{{ form.alternate_payer.errors }}</div></section>
+    {% if form.errors %}
+      <div class="form-error-summary" role="alert">
+        <strong>ยังบันทึกผู้ใช้ไม่ได้</strong>
+        <p>กรุณาตรวจสอบข้อมูลที่มีเครื่องหมายสีแดงด้านล่าง</p>
+        <ul>{% for field in form %}{% for error in field.errors %}<li>{{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+      </div>
+    {% endif %}
+    <section class="card user-form-card"><div class="form-field"><label for="{{ form.position_level.id_for_label }}">ระดับตำแหน่ง</label>{{ form.position_level }}{% for error in form.position_level.errors %}<span class="field-error">{{ error }}</span>{% endfor %}<small>Manager และผู้บริหารต้องให้ CFO ร่วมอนุมัติทุกคำขอ</small></div></section>
+    <section class="card user-form-card"><h2>ข้อมูลผู้ใช้</h2><div class="form-grid user-identity-grid">{% for field in form %}{% if field.name in 'username first_name last_name email business_unit department work_location' %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required"> *</span>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endif %}{% endfor %}<div class="form-field other-location-field" id="other-location-field"><label for="{{ form.work_location_other.id_for_label }}">{{ form.work_location_other.label }}</label>{{ form.work_location_other }}{% for error in form.work_location_other.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div></div><div class="ad-login-option">{% for field in form %}{% if field.name == 'is_ad_auth' %}<div><span class="ad-option-icon">AD</span><div><strong>เข้าสู่ระบบด้วย Active Directory</strong><p>ใช้ชื่อผู้ใช้ด้านบนเป็น Username เดียวกับบัญชี AD ของพนักงาน</p></div></div><label class="ad-toggle" for="{{ field.id_for_label }}">{{ field }}<span>เปิดใช้ AD Login</span></label>{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}{% endif %}{% endfor %}</div></section>
+    <section class="card user-form-card approval-flow-card"><div class="section-heading"><div><span class="eyebrow">สายอนุมัติของผู้ใช้นี้</span><h2>ลำดับการอนุมัติ</h2><p class="muted">ทุกคำขอผ่านผู้อนุมัติที่ผูกไว้ แล้วผู้จัดการบัญชี · ยอดเกิน {{ executive_approval_threshold|floatformat:"-2" }} บาท หรือผู้ขอเป็น Manager ขึ้นไป ต้องให้ CFO อนุมัติด้วย · กรณีอื่น CFO รับทราบเท่านั้น</p></div></div><div class="flow-steps"><div class="flow-node current"><span>1</span><strong>ผู้ขอเบิก</strong><small>{{ managed_user.get_full_name|default:"ผู้ใช้คนนี้" }}</small></div><div class="flow-arrow">→</div>{% for field in form %}{% if field.name == 'supervisor' or field.name == 'accounting_manager' or field.name == 'accountant' %}<div class="flow-node"><span>{% if field.name == 'supervisor' %}2{% elif field.name == 'accounting_manager' %}3{% else %}4{% endif %}</span><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<small class="field-error">{{ error }}</small>{% endfor %}</div>{% if field.name != 'accountant' %}<div class="flow-arrow">→</div>{% endif %}{% endif %}{% endfor %}</div><p class="muted">CFO เลือกได้ในหน้าตั้งค่าระบบ และจะอนุมัติหลังผู้จัดการบัญชีเมื่อเข้าเงื่อนไขข้างต้น</p></section>
+    <section class="card user-form-card telegram-card"><span class="eyebrow">Telegram</span><h2>การแจ้งเตือน</h2><p class="muted">ใช้ Telegram User ID สำหรับแจ้งงานที่เกี่ยวข้องกับผู้ใช้นี้ ผู้ใช้ต้องกด Start กับ Bot ก่อนทดสอบส่งข้อความ</p>{% for field in form %}{% if field.name == 'telegram_user_id' %}<div class="form-field telegram-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% elif field.name == 'telegram_notifications_enabled' %}<div class="setting-row"><div><strong>{{ field.label }}</strong><small>ส่งข้อความแจ้งเตือนงานที่เกี่ยวข้องไปยัง Telegram ของผู้ใช้นี้</small>{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div><label class="switch-control" for="{{ field.id_for_label }}">{{ field }}<span class="switch-slider" aria-hidden="true"></span><span class="sr-only">{{ field.label }}</span></label></div>{% endif %}{% endfor %}<div class="telegram-test"><button id="telegram-test-button" class="button button-secondary" type="button" data-url="{% url 'telegram_test_message' %}">ส่งข้อความทดสอบ</button><span id="telegram-test-result" class="muted" aria-live="polite"></span></div></section>
+    <section class="card user-form-card"><h2>สิทธิ์และสถานะบัญชี</h2><div class="form-grid">{% for field in form %}{% if field.name == 'groups' or field.name == 'password' %}<div class="form-field {% if field.name == 'groups' %}form-field-wide{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required"> *</span>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% elif field.name == 'is_active' %}<div class="setting-row form-field-wide"><div><strong>{{ field.label }}</strong><small>ปิดใช้งานแทนการลบ หากต้องการเก็บข้อมูลและประวัติการทำงานของผู้ใช้นี้ไว้</small>{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div><label class="switch-control" for="{{ field.id_for_label }}">{{ field }}<span class="switch-slider" aria-hidden="true"></span><span class="sr-only">{{ field.label }}</span></label></div>{% endif %}{% endfor %}</div><button class="button button-primary" type="submit">บันทึกข้อมูลผู้ใช้</button></section>
+  </form>
+  <script>
+    const buField = document.querySelector('#id_business_unit');
+    if (buField && window.enhanceSearchableSelects) {
+      window.enhanceSearchableSelects(buField.closest('.form-field'));
+    }
+  </script>
+  <script>
+    (() => {
+      const button = document.querySelector('#telegram-test-button');
+      const userId = document.querySelector('#id_telegram_user_id');
+      const result = document.querySelector('#telegram-test-result');
+      const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+      if (!button || !userId || !result || !csrf) return;
+      button.addEventListener('click', async () => {
+        const value = userId.value.trim();
+        if (!value) { result.textContent = 'กรุณากรอก Telegram User ID ก่อน'; result.className = 'field-error'; return; }
+        button.disabled = true; button.textContent = 'กำลังส่ง...'; result.textContent = '';
+        try {
+          const body = new URLSearchParams({telegram_user_id: value});
+          const response = await fetch(button.dataset.url, {method: 'POST', headers: {'X-CSRFToken': csrf.value, 'Content-Type': 'application/x-www-form-urlencoded'}, body});
+          const data = await response.json();
+          result.textContent = data.message;
+          result.className = data.ok ? 'telegram-test-success' : 'field-error';
+        } catch (_) { result.textContent = 'ไม่สามารถเชื่อมต่อเพื่อส่งข้อความทดสอบได้'; result.className = 'field-error'; }
+        button.disabled = false; button.textContent = 'ส่งข้อความทดสอบ';
+      });
+    })();
+  </script>
+{% endblock %}

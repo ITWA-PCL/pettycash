@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}ตั้งค่าลายเซ็น | Petty Cash{% endblock %}
+{% block page_class %} signature-shell{% endblock %}
+
+{% block content %}
+  <section class="signature-card card">
+    <span class="eyebrow">{% if is_update %}โปรไฟล์ของฉัน{% else %}เริ่มต้นใช้งาน{% endif %}</span>
+    <h1>{% if is_update %}โปรไฟล์และลายเซ็น{% else %}ตั้งค่าโปรไฟล์และลายเซ็น{% endif %}</h1>
+    <p class="signature-intro">ตรวจสอบข้อมูลของคุณและจัดการลายเซ็นที่ใช้แสดงในเอกสารเบิกเงิน</p>
+    <section class="profile-details">
+      <div class="profile-section-heading"><div><h2>ข้อมูลส่วนตัว</h2><p>แก้ไขชื่อ อีเมล และข้อมูล Telegram ของคุณได้</p></div></div>
+      <form method="post" class="profile-form" data-confirm="ยืนยันบันทึกข้อมูลโปรไฟล์?">{% csrf_token %}<input type="hidden" name="action" value="profile">
+        {% if profile_form.non_field_errors %}<div class="alert">{{ profile_form.non_field_errors }}</div>{% endif %}
+        <div class="profile-readonly"><div><span>Username</span><strong>{{ user.username }}</strong></div><div><span>BU / แผนก</span><strong>{{ user.business_unit|default:"-" }}{% if user.department %} / {{ user.department }}{% endif %}</strong></div><div><span>สถานที่ทำงาน</span><strong>{{ user.get_work_location_display }}</strong></div><div><span>สิทธิ์</span><strong>{% for role in user.role_names %}{{ role }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</strong></div></div>
+        <div class="form-grid">{% for field in profile_form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+        <button class="button button-secondary" type="submit">บันทึกข้อมูลส่วนตัว</button>
+      </form>
+    </section>
+    {% if password_form %}
+    <section class="profile-password">
+      <div class="profile-section-heading"><div><h2>เปลี่ยนรหัสผ่าน</h2><p>สำหรับบัญชีภายในเท่านั้น กรุณาใช้รหัสผ่านใหม่ที่คาดเดาได้ยาก</p></div></div>
+      <form method="post" class="password-change-form" data-confirm="ยืนยันเปลี่ยนรหัสผ่าน? คุณจะยังใช้งานต่อในระบบได้ตามปกติ">{% csrf_token %}<input type="hidden" name="action" value="password">
+        {% if password_form.non_field_errors %}<div class="alert">{{ password_form.non_field_errors }}</div>{% endif %}
+        <div class="form-field password-single-field"><label for="{{ password_form.password.id_for_label }}">{{ password_form.password.label }}</label>{{ password_form.password }}<small>{{ password_form.password.help_text }}</small>{% for error in password_form.password.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>
+        <button class="button button-secondary button-compact" type="submit">เปลี่ยนรหัสผ่าน</button>
+      </form>
+    </section>
+    {% endif %}
+    <hr class="profile-divider">
+    <section class="signature-section">
+    <h2>ลายเซ็น</h2>
+    <p class="signature-intro">เปลี่ยนลายเซ็นใหม่ได้ทุกเมื่อ โดยจะใช้กับเอกสารในอนาคต</p>
+    {% if is_update %}
+      <div class="saved-signature">
+        <span>ลายเซ็นที่บันทึกไว้</span>
+        <img src="{{ user.signature.url }}" alt="ลายเซ็นปัจจุบันของ {{ user.get_full_name|default:user.username }}">
+      </div>
+      <p class="signature-replace-note">หากต้องการแก้ไข ให้เลือกลายเซ็นใหม่ด้านล่าง ระบบจะใช้ลายเซ็นใหม่นี้กับเอกสารในอนาคต</p>
+    {% endif %}
+    <form method="post" enctype="multipart/form-data" id="signature-form" data-confirm="ยืนยันบันทึกลายเซ็นนี้? ระบบจะใช้กับเอกสารคำขอในอนาคต">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="signature">
+      {% if form.non_field_errors %}<div class="alert signature-form-alert">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="signature-tabs" role="group" aria-label="วิธีเพิ่มลายเซ็น">
+        <button class="signature-tab is-active" type="button" data-target="draw-panel">วาดลายเซ็น</button>
+        <button class="signature-tab" type="button" data-target="upload-panel">อัปโหลดรูปภาพ</button>
+      </div>
+      <div id="draw-panel" class="signature-option">
+        <div class="signature-canvas-wrap"><canvas id="signature-canvas" width="900" height="350" aria-label="พื้นที่วาดลายเซ็น"></canvas></div>
+        <div class="signature-actions"><span>วาดด้วยเมาส์หรือปลายนิ้ว</span><button type="button" class="text-action" id="clear-signature">ล้างลายเซ็น</button></div>
+      </div>
+      <div id="upload-panel" class="signature-option is-hidden">
+        <label class="upload-area" for="id_signature_upload"><span id="upload-label">เลือกไฟล์ลายเซ็น</span><small id="upload-help">PNG หรือ JPG ขนาดไม่เกิน 2 MB</small><img id="upload-preview" class="upload-preview is-hidden" alt="ตัวอย่างลายเซ็นที่เลือก"></label>
+        {{ form.signature_upload }}
+        {% if form.signature_upload.errors %}<div class="field-error">{{ form.signature_upload.errors }}</div>{% endif %}
+      </div>
+      {{ form.signature_data }}
+      {% if form.signature_data.errors %}<div class="field-error">{{ form.signature_data.errors }}</div>{% endif %}
+      <button class="button button-primary signature-submit" type="submit">{% if is_update %}บันทึกลายเซ็นใหม่{% else %}บันทึกและเริ่มใช้งาน{% endif %}</button>
+    </form>
+    </section>
+  </section>
+  <script>
+    (() => {
+      const canvas = document.getElementById('signature-canvas');
+      const context = canvas.getContext('2d');
+      const hiddenInput = document.getElementById('id_signature_data');
+      const form = document.getElementById('signature-form');
+      const upload = document.getElementById('id_signature_upload');
+      const uploadLabel = document.getElementById('upload-label');
+      const uploadHelp = document.getElementById('upload-help');
+      const uploadPreview = document.getElementById('upload-preview');
+      let drawing = false, hasDrawing = false;
+      context.strokeStyle = '#172033'; context.lineWidth = 4; context.lineCap = 'round';
+      const point = (event) => { const box = canvas.getBoundingClientRect(); return { x: (event.clientX - box.left) * canvas.width / box.width, y: (event.clientY - box.top) * canvas.height / box.height }; };
+      canvas.addEventListener('pointerdown', (event) => { drawing = true; hasDrawing = true; canvas.setPointerCapture(event.pointerId); const p = point(event); context.beginPath(); context.moveTo(p.x, p.y); });
+      canvas.addEventListener('pointermove', (event) => { if (!drawing) return; const p = point(event); context.lineTo(p.x, p.y); context.stroke(); });
+      canvas.addEventListener('pointerup', () => drawing = false);
+      document.getElementById('clear-signature').addEventListener('click', () => { context.clearRect(0, 0, canvas.width, canvas.height); hasDrawing = false; hiddenInput.value = ''; });
+      document.querySelectorAll('.signature-tab').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.signature-tab').forEach((item) => item.classList.remove('is-active')); document.querySelectorAll('.signature-option').forEach((item) => item.classList.add('is-hidden')); tab.classList.add('is-active'); document.getElementById(tab.dataset.target).classList.remove('is-hidden'); }));
+      upload.addEventListener('change', () => { const file = upload.files[0]; if (!file) return; uploadLabel.textContent = file.name; uploadHelp.textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB · พร้อมอัปโหลด'; const reader = new FileReader(); reader.onload = event => { uploadPreview.src = event.target.result; uploadPreview.classList.remove('is-hidden'); }; reader.readAsDataURL(file); });
+      form.addEventListener('submit', () => { if (hasDrawing && !document.getElementById('upload-panel').classList.contains('is-hidden')) return; if (hasDrawing) hiddenInput.value = canvas.toDataURL('image/png'); });
+      document.querySelectorAll('.signature-form-alert').forEach((alert) => window.setTimeout(() => { alert.classList.add('is-dismissing'); window.setTimeout(() => alert.remove(), 220); }, 5500));
+    })();
+  </script>
+{% endblock %}

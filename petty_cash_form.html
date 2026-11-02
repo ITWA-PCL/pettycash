@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ใบขอเบิกเงินสดย่อย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#1F3A5F;
+    --navy-dark:#152840;
+    --line:#D9D7CE;
+    --line-strong:#B9B6A8;
+    --text:#2B2B28;
+    --text-soft:#6B6A63;
+    --bg-page:#EEECE3;
+    --bg-card:#FFFFFF;
+    --bg-total:#EEF2F7;
+    --danger:#B3261E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg-page);
+    font-family:'Sarabun',sans-serif;
+    color:var(--text);
+    padding:20px 16px 36px;
+    font-size:14px;
+    line-height:1.35;
+  }
+  .sheet{
+    max-width:820px;
+    margin:0 auto;
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);
+  }
+  .toolbar{
+    max-width:820px;
+    margin:0 auto 12px;
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+  }
+  .btn{
+    font-family:'Sarabun',sans-serif;
+    font-size:14px;
+    padding:8px 16px;
+    border-radius:4px;
+    border:1px solid var(--line-strong);
+    background:#fff;
+    color:var(--text);
+    cursor:pointer;
+  }
+  .btn:hover{background:#F7F6F1;}
+  .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff;}
+  .btn.primary:hover{background:var(--navy-dark);}
+  .btn.small{padding:4px 10px;font-size:13px;}
+  .btn.danger{color:var(--danger);border-color:#E3B7B3;}
+
+  .header{
+    background:var(--navy);
+    color:#fff;
+    padding:14px 32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:16px;
+  }
+  .company-field{
+    background:transparent;
+    border:none;
+    border-bottom:1px solid transparent;
+    color:#fff;
+    font-family:'Sarabun',sans-serif;
+    font-size:19px;
+    font-weight:600;
+    padding:4px 2px;
+    width:420px;
+  }
+  .company-field:focus{outline:none;}
+  .company-field[readonly]{cursor:default;}
+  .company-field::placeholder{color:rgba(255,255,255,0.55);}
+  .header-title{
+    text-align:right;
+  }
+  .header-title h1{
+    margin:0;
+    font-size:21px;
+    font-weight:700;
+    letter-spacing:0.5px;
+  }
+  .header-title p{
+    margin:4px 0 0;
+    font-size:12.5px;
+    color:rgba(255,255,255,0.75);
+  }
+
+  .meta{
+    display:grid;
+    grid-template-columns:2fr 1fr;
+    gap:0;
+    border-bottom:1px solid var(--line);
+  }
+  .meta-cell{
+    padding:9px 24px;
+    border-right:1px solid var(--line);
+  }
+  .meta-cell:nth-child(2n){border-right:none;}
+  .meta-cell:nth-child(-n+2){border-bottom:1px solid var(--line);}
+  .field-label{
+    display:block;
+    font-size:13px;
+    color:var(--text-soft);
+    margin-bottom:4px;
+  }
+  .field-input{
+    width:100%;
+    border:none;
+    border-bottom:1px solid var(--line-strong);
+    font-family:'Sarabun',sans-serif;
+    font-size:13px;
+    padding:4px 2px;
+    background:transparent;
+    color:var(--text);
+  }
+  .field-input:focus{outline:none;border-bottom-color:var(--navy);}
+  .date-field-wrap{position:relative;}
+  .date-input-native{
+    position:relative;
+    z-index:2;
+    color:transparent;
+    caret-color:transparent;
+  }
+  .date-input-native::-webkit-datetime-edit{color:transparent;}
+  .date-input-native::-webkit-calendar-picker-indicator{
+    opacity:1;
+    cursor:pointer;
+    position:relative;
+    z-index:3;
+  }
+  .date-display{
+    position:absolute;
+    left:2px;
+    top:50%;
+    transform:translateY(-50%);
+    font-family:'Sarabun',sans-serif;
+    font-size:15px;
+    color:var(--text);
+    pointer-events:none;
+  }
+  .date-display.placeholder{color:#B7B5AC;font-weight:300;}
+  .field-input::placeholder,tbody input::placeholder{color:#B7B5AC;font-weight:300;}
+  .amt-excluded{color:var(--danger) !important;text-decoration:line-through;text-decoration-color:rgba(179,38,30,0.5);}
+  .field-locked{
+    width:auto;
+    min-width:130px;
+    max-width:160px;
+    background:#e8e8e8;
+    border:none;
+    border-bottom:1px dotted #999;
+    color:#9C9A90;
+    cursor:not-allowed;
+    padding:2px 4px;
+    font-size:13px;
+  }
+  .field-locked::placeholder{color:#9C9A90;font-style:italic;}
+  .field-input.invalid{border-bottom-color:var(--danger);}
+  .error-msg{font-size:12px;color:var(--danger);margin-top:3px;min-height:0;}
+  .office-choice.invalid label{color:var(--danger);}
+  .office-choice{display:flex;flex-wrap:wrap;gap:14px;align-items:center;}
+  .office-choice label{font-size:13px;color:var(--text);display:flex;align-items:center;gap:5px;white-space:nowrap;}
+  .office-choice .field-input{width:auto;flex:1;min-width:120px;}
+  .dual-field{display:flex;gap:24px;}
+  .dual-field>div{flex:1;}
+
+  .body{padding:16px 32px 4px;}
+  .section-label{
+    font-size:13.5px;
+    color:var(--text-soft);
+    margin:0 0 10px;
+  }
+
+  table{width:100%;border-collapse:collapse;}
+  thead th{
+    text-align:left;
+    font-size:13px;
+    font-weight:500;
+    color:var(--text-soft);
+    border-bottom:1px solid var(--line-strong);
+    padding:5px 6px;
+  }
+  thead th.num{text-align:right;}
+  thead th.center{text-align:center;}
+  tbody td{
+    padding:2px 6px;
+    border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  tbody input{
+    width:100%;
+    border:none;
+    background:transparent;
+    font-family:'Sarabun',sans-serif;
+    font-size:13px;
+    padding:4px 4px;
+    color:var(--text);
+  }
+  tbody input:focus{outline:none;background:#F7F9FB;}
+  tbody input.num{text-align:right;}
+  .col-no{width:34px;color:var(--text-soft);font-size:14px;text-align:center;}
+  .col-amt{width:130px;}
+  .col-del{width:32px;text-align:center;}
+  .del-row{
+    border:none;background:none;cursor:pointer;color:var(--text-soft);
+    font-size:16px;line-height:1;padding:4px;
+  }
+  .del-row:hover{color:var(--danger);}
+
+  .add-row-wrap{padding:10px 2px 4px;}
+
+  .totals{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:6px;
+  }
+  .totals-box{
+    width:100%;
+    max-width:480px;
+    background:var(--bg-total);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:9px 14px;
+  }
+  .totals-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:15px;
+    font-weight:600;
+    color:var(--navy);
+  }
+  .totals-words{
+    margin-top:4px;
+    font-size:13px;
+    color:var(--text-soft);
+    text-align:right;
+    line-height:1.4;
+    word-break:break-word;
+  }
+
+  .notes{padding:10px 32px 2px;}
+  .notes .field-input{border-bottom:1px solid var(--line-strong);}
+
+  .sig-section{
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px solid var(--line);
+  }
+  .signatures{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:0;
+    margin-top:8px;
+  }
+  .sig-cell{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:0 16px 12px;
+    border-right:1px solid var(--line);
+    text-align:center;
+  }
+  .sig-cell:last-child{border-right:none;}
+  .sig-note-slot{
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    min-height:24px;
+    margin-bottom:6px;
+  }
+  .sig-line{
+    width:100%;
+    max-width:150px;
+    border-bottom:1px solid var(--line-strong);
+    height:56px;
+    margin-bottom:6px;
+  }
+  .sig-role{font-size:13px;font-weight:600;color:var(--text);}
+  .sig-sub{font-size:11px;color:var(--text-soft);margin-top:2px;}
+  .sig-note{font-size:11px;color:var(--navy);font-weight:600;line-height:1.35;}
+  .sig-date{font-size:11px;color:var(--text-soft);margin-top:8px;}
+
+  .footer-note{
+    padding:8px 32px 12px;
+    font-size:11px;
+    color:var(--text-soft);
+    font-style:italic;
+  }
+
+  @media print{
+    :root{
+      --line:#8A8A80;
+      --line-strong:#555;
+    }
+    body{background:#fff;padding:0;color:#000;}
+    .toolbar{display:none;}
+    .sheet{border:none;box-shadow:none;max-width:100%;}
+    .del-row,#addRowBtn{display:none;}
+    tbody input,.field-input,.company-field{border-color:#555 !important;}
+    .error-msg{display:none;}
+    .field-input,.date-display,tbody input,.company-field,
+    .sig-role,.sig-date,.field-label,.section-label,thead th,
+    .office-choice label,.sig-sub,.totals-words,.footer-note{
+      color:#000 !important;
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
+    .header{background:#fff !important;border-bottom:2px solid #000;}
+    .header-title h1{color:#000 !important;}
+    .header-title p{color:#333 !important;}
+    .company-field{color:#000 !important;}
+    .amt-excluded{color:var(--danger) !important;}
+  }
+  @media (max-width:640px){
+    .meta{grid-template-columns:1fr;}
+    .meta-cell{border-right:none;border-bottom:1px solid var(--line);}
+    .signatures{grid-template-columns:1fr;}
+    .sig-cell{border-right:none;border-bottom:1px solid var(--line);}
+    .header{flex-direction:column;align-items:flex-start;}
+    .header-title{text-align:left;}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button class="btn" onclick="addRow()">+ เพิ่มรายการ</button>
+  <button class="btn primary" onclick="handlePrintClick()">พิมพ์ / บันทึกเป็น PDF</button>
+</div>
+
+<div class="sheet">
+  <div class="header">
+    <div>
+      <input class="company-field" id="companyName" value="บริษัท วินโดว์ เอเชีย จำกัด (มหาชน)" readonly>
+    </div>
+    <div class="header-title">
+      <h1>ใบขอเบิกเงินสดย่อย</h1>
+      <p>Petty Cash Request Form</p>
+    </div>
+  </div>
+
+  <div class="meta">
+    <div class="meta-cell">
+      <span class="field-label">สำนักงานใหญ่ / สาขา</span>
+      <div class="office-choice" id="officeGroup">
+        <label><input type="radio" name="office" value="head" checked> สำนักงานใหญ่</label>
+        <label><input type="radio" name="office" value="branch"> สาขา</label>
+        <input class="field-input" id="branchName" placeholder="ระบุชื่อสาขา">
+      </div>
+      <div class="error-msg" id="err-office"></div>
+    </div>
+    <div class="meta-cell">
+      <span class="field-label">เลขที่เอกสาร / Doc No.</span>
+      <input class="field-input field-locked" id="docNo" disabled>
+    </div>
+    <div class="meta-cell">
+      <div class="dual-field">
+        <div style="flex:1.6">
+          <span class="field-label">ผู้ขอเบิก / Requested by</span>
+          <input class="field-input" id="requester" placeholder="ชื่อ-นามสกุล">
+          <div class="error-msg" id="err-requester"></div>
+        </div>
+        <div style="flex:1">
+          <span class="field-label">ฝ่าย / Division</span>
+          <input class="field-input" id="department" placeholder="ระบุฝ่าย">
+          <div class="error-msg" id="err-department"></div>
+        </div>
+      </div>
+    </div>
+    <div class="meta-cell">
+      <span class="field-label">วันที่ / Date</span>
+      <div class="date-field-wrap">
+        <input class="field-input date-input-native" type="date" id="docDate">
+        <div class="date-display" id="docDateDisplay">dd/mm/yyyy</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="body">
+    <p class="section-label">รายการที่ขอเบิก / Items</p>
+    <table>
+      <thead>
+        <tr>
+          <th class="center">#</th>
+          <th>รายละเอียด / Description</th>
+          <th class="num">จำนวนเงิน (บาท)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rowsBody"></tbody>
+    </table>
+
+    <div class="totals">
+      <div class="totals-box">
+        <div class="totals-row">
+          <span>รวมเป็นเงิน</span>
+          <span id="totalAmt">0.00</span>
+        </div>
+        <div class="totals-words" id="totalWords">( - บาทถ้วน )</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <span class="field-label">ชื่องบประมาณ / Budget</span>
+    <input class="field-input" id="budgetName" placeholder="ระบุชื่องบประมาณ">
+    <div class="error-msg" id="err-budgetName"></div>
+    <div style="margin-top:10px">
+      <span class="field-label">เหตุผล / วัตถุประสงค์การขอเบิก</span>
+      <input class="field-input" id="purpose" placeholder="ระบุเหตุผลการขอเบิกเงินสดย่อย">
+      <div class="error-msg" id="err-purpose"></div>
+    </div>
+  </div>
+
+  <div class="sig-section">
+    <p class="section-label" style="padding:0 32px;margin-bottom:0">การลงนาม / Signatures</p>
+    <div class="signatures signatures-4">
+      <div class="sig-cell">
+        <div class="sig-note-slot"></div>
+        <div class="sig-line"></div>
+        <div class="sig-role">ผู้ขอเบิก</div>
+        <div class="sig-sub">Requested by</div>
+        <div class="sig-date">วันที่ .........................</div>
+      </div>
+      <div class="sig-cell">
+        <div class="sig-note-slot"><div class="sig-note">หัวหน้าแผนกขึ้นไปหรือผู้บังคับบัญชา</div></div>
+        <div class="sig-line"></div>
+        <div class="sig-role">ผู้ตรวจสอบ</div>
+        <div class="sig-sub">Reviewed by</div>
+        <div class="sig-date">วันที่ .........................</div>
+      </div>
+      <div class="sig-cell">
+        <div class="sig-note-slot"><div class="sig-note">ฝ่ายการเงินเท่านั้น</div></div>
+        <div class="sig-line"></div>
+        <div class="sig-role">ผู้อนุมัติ</div>
+        <div class="sig-sub">Approved by</div>
+        <div class="sig-date">วันที่ .........................</div>
+      </div>
+      <div class="sig-cell">
+        <div class="sig-note-slot"></div>
+        <div class="sig-line"></div>
+        <div class="sig-role">ผู้จ่ายเงิน</div>
+        <div class="sig-sub">Paid by (Finance)</div>
+        <div class="sig-date">วันที่ .........................</div>
+      </div>
+      <div class="sig-cell">
+        <div class="sig-note-slot"></div>
+        <div class="sig-line"></div>
+        <div class="sig-role">ผู้รับเงิน</div>
+        <div class="sig-sub">Received by</div>
+        <div class="sig-date">วันที่ .........................</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">แบบฟอร์มนี้จัดทำเพื่อใช้ภายในบริษัท กรอกข้อมูลแล้วกดพิมพ์หรือบันทึกเป็น PDF เพื่อเสนอผู้มีอำนาจอนุมัติ</div>
+</div>
+
+<script>
+let rowCount = 0;
+
+function addRow(desc, amt){
+  rowCount++;
+  const tbody = document.getElementById('rowsBody');
+  const tr = document.createElement('tr');
+  const initVal = amt!=null ? formatMoney(amt) : '';
+  tr.innerHTML =
+    '<td class="col-no">'+rowCount+'</td>'+
+    '<td><input type="text" class="desc-input" placeholder="รายละเอียดรายการ" value="'+(desc||'')+'"></td>'+
+    '<td class="col-amt"><input type="text" inputmode="decimal" class="amt-input num" placeholder="0.00" value="'+initVal+'"></td>'+
+    '<td class="col-del"><button class="del-row" onclick="deleteRow(this)" aria-label="ลบรายการ">&times;</button></td>';
+  tbody.appendChild(tr);
+  const amtInput = tr.querySelector('.amt-input');
+  const descInput = tr.querySelector('.desc-input');
+  amtInput.addEventListener('input', updateTotal);
+  amtInput.addEventListener('blur', ()=>{
+    const val = parseAmount(amtInput.value);
+    amtInput.value = val ? formatMoney(val) : '';
+    updateTotal();
+  });
+  amtInput.addEventListener('focus', ()=>{
+    const val = parseAmount(amtInput.value);
+    amtInput.value = val ? String(val) : '';
+  });
+  descInput.addEventListener('input', updateTotal);
+  updateTotal();
+}
+
+function parseAmount(str){
+  const cleaned = String(str||'').replace(/,/g,'').trim();
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+}
+
+function formatMoney(num){
+  return Number(num).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function deleteRow(btn){
+  const tbody = document.getElementById('rowsBody');
+  if(tbody.children.length <= 1) return;
+  btn.closest('tr').remove();
+  renumberRows();
+  updateTotal();
+}
+
+function renumberRows(){
+  const rows = document.querySelectorAll('#rowsBody tr');
+  rows.forEach((r,i)=>{ r.querySelector('.col-no').textContent = i+1; });
+  rowCount = rows.length;
+}
+
+function updateTotal(){
+  const rows = document.querySelectorAll('#rowsBody tr');
+  let sum = 0;
+  rows.forEach(row=>{
+    const desc = row.querySelector('.desc-input').value.trim();
+    const amtInput = row.querySelector('.amt-input');
+    const amt = parseAmount(amtInput.value);
+    if(desc){
+      sum += amt;
+      amtInput.classList.remove('amt-excluded');
+    } else if(amt){
+      amtInput.classList.add('amt-excluded');
+    } else {
+      amtInput.classList.remove('amt-excluded');
+    }
+  });
+  document.getElementById('totalAmt').textContent = formatMoney(sum);
+  document.getElementById('totalWords').textContent = '( ' + bahtText(sum) + ' )';
+}
+
+function bahtText(number){
+  const numText = ['ศูนย์','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+  const digitPos = ['','สิบ','ร้อย','พัน','หมื่น','แสน','ล้าน'];
+  number = Math.round((number || 0) * 100) / 100;
+  if(number === 0) return 'ศูนย์บาทถ้วน';
+  const parts = number.toFixed(2).split('.');
+  const baht = parts[0];
+  const satang = parseInt(parts[1], 10);
+
+  function convert(numStr){
+    let result = '';
+    const len = numStr.length;
+    for(let i=0; i<len; i++){
+      const digit = parseInt(numStr[i], 10);
+      const pos = len - i - 1;
+      const posInMillion = pos % 6;
+      if(digit === 0) continue;
+      if(posInMillion === 1 && digit === 1){
+        result += 'สิบ';
+      } else if(posInMillion === 1 && digit === 2){
+        result += 'ยี่สิบ';
+      } else if(posInMillion === 0 && digit === 1 && len > 1 && i > 0){
+        result += 'เอ็ด';
+      } else {
+        result += numText[digit] + digitPos[posInMillion];
+      }
+      if(posInMillion === 0 && pos > 0) result += 'ล้าน';
+    }
+    return result;
+  }
+
+  let bahtWords = baht === '0' ? '' : convert(baht) + 'บาท';
+  let satangWords = satang === 0 ? 'ถ้วน' : convert(String(satang)) + 'สตางค์';
+  return bahtWords + satangWords;
+}
+
+document.getElementById('docDate').valueAsDate = new Date();
+
+function updateDateDisplay(){
+  const input = document.getElementById('docDate');
+  const display = document.getElementById('docDateDisplay');
+  if(input.value){
+    const [y, m, d] = input.value.split('-');
+    display.textContent = d + '/' + m + '/' + y;
+    display.classList.remove('placeholder');
+  } else {
+    display.textContent = 'dd/mm/yyyy';
+    display.classList.add('placeholder');
+  }
+}
+document.getElementById('docDate').addEventListener('input', updateDateDisplay);
+document.getElementById('docDate').addEventListener('change', updateDateDisplay);
+updateDateDisplay();
+addRow();
+addRow();
+addRow();
+
+function clearFieldError(inputId, errId){
+  const input = document.getElementById(inputId);
+  const err = document.getElementById(errId);
+  input.classList.remove('invalid');
+  err.textContent = '';
+}
+
+function setFieldError(inputId, errId, message){
+  const input = document.getElementById(inputId);
+  const err = document.getElementById(errId);
+  input.classList.add('invalid');
+  err.textContent = message;
+}
+
+['requester','department','budgetName','purpose','branchName'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', ()=>{
+    if(document.getElementById(id).value.trim()) clearFieldError(id, 'err-'+id);
+  });
+});
+document.querySelectorAll('input[name="office"]').forEach(radio=>{
+  radio.addEventListener('change', ()=>{
+    document.getElementById('officeGroup').classList.remove('invalid');
+    document.getElementById('err-office').textContent = '';
+  });
+});
+
+function handlePrintClick(){
+  let firstInvalid = null;
+  let ok = true;
+
+  const officeSelected = document.querySelector('input[name="office"]:checked');
+  const branchVal = document.getElementById('branchName').value.trim();
+  if(!officeSelected){
+    document.getElementById('officeGroup').classList.add('invalid');
+    document.getElementById('err-office').textContent = 'กรุณาเลือกสำนักงานใหญ่หรือสาขา';
+    ok = false;
+    firstInvalid = firstInvalid || document.getElementById('officeGroup');
+  } else if(officeSelected.value === 'branch' && !branchVal){
+    setFieldError('branchName', 'err-office', 'กรุณาระบุชื่อสาขา');
+    ok = false;
+    firstInvalid = firstInvalid || document.getElementById('branchName');
+  } else {
+    clearFieldError('branchName', 'err-office');
+  }
+
+  const required = [
+    ['requester','err-requester','กรุณาระบุชื่อผู้ขอเบิก'],
+    ['department','err-department','กรุณาระบุฝ่าย'],
+    ['budgetName','err-budgetName','กรุณาระบุชื่องบประมาณ'],
+    ['purpose','err-purpose','กรุณาระบุเหตุผล/วัตถุประสงค์']
+  ];
+  required.forEach(([id, errId, msg])=>{
+    const val = document.getElementById(id).value.trim();
+    if(!val){
+      setFieldError(id, errId, msg);
+      ok = false;
+      firstInvalid = firstInvalid || document.getElementById(id);
+    } else {
+      clearFieldError(id, errId);
+    }
+  });
+
+  if(!ok){
+    if(firstInvalid) firstInvalid.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  preparePrintRows();
+  window.print();
+}
+
+let allRowsSnapshot = null;
+
+function preparePrintRows(){
+  const tbody = document.getElementById('rowsBody');
+  allRowsSnapshot = Array.from(tbody.children);
+  const keep = allRowsSnapshot.filter(row=>{
+    const desc = row.querySelector('.desc-input').value.trim();
+    const amt = parseAmount(row.querySelector('.amt-input').value);
+    return desc && amt !== 0;
+  });
+  tbody.innerHTML = '';
+  keep.forEach((row, i)=>{
+    row.querySelector('.col-no').textContent = i+1;
+    tbody.appendChild(row);
+  });
+}
+
+window.addEventListener('afterprint', ()=>{
+  if(!allRowsSnapshot) return;
+  const tbody = document.getElementById('rowsBody');
+  tbody.innerHTML = '';
+  allRowsSnapshot.forEach(row=>tbody.appendChild(row));
+  allRowsSnapshot = null;
+  renumberRows();
+});
+</script>
+
+</body>
+</html>

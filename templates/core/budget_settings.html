@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{% if can_manage_budgets %}Budget และ BU{% else %}Budget{% endif %} | Petty Cash{% endblock %}
+{% block content %}
+<section class="dashboard-header"><div><span class="eyebrow">MASTER DATA</span><h1>{% if can_manage_budgets %}Budget และ BU{% else %}Budget{% endif %}</h1><p class="muted">Budget แสดงตามแผนกเจ้าของรายการ{% if can_manage_budgets %} · BU ใช้ค่า Distribution Rule{% endif %} ไม่มีการกำหนดจำนวนเงินในหน้านี้</p></div></section>
+
+{% if can_manage_budgets %}
+<details class="card master-editor" {% if editing or form.errors %}open{% endif %}>
+  <summary>{% if editing %}แก้ไข Budget{% else %}+ เพิ่ม Budget{% endif %}</summary>
+  <form method="post" class="budget-form" data-confirm="ยืนยันบันทึก Budget นี้?">
+    {% csrf_token %}{% if editing %}<input type="hidden" name="budget_id" value="{{ editing.pk }}">{% endif %}
+    {% if form.non_field_errors %}<div class="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="form-grid">{% for field in form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }} <span class="required">*</span></label>{{ field }}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+    <div class="budget-form-actions"><button class="button button-primary button-compact" type="submit">{% if editing %}บันทึกการแก้ไข{% else %}เพิ่ม Budget{% endif %}</button>{% if editing %}<a class="button button-secondary button-compact" href="{% url 'budget_settings' %}">ยกเลิก</a>{% endif %}</div>
+  </form>
+</details>
+<details class="card master-editor" {% if editing_bu or bu_form.errors %}open{% endif %}>
+  <summary>{% if editing_bu %}แก้ไข BU{% else %}+ เพิ่ม BU{% endif %}</summary>
+  <form method="post" class="budget-form" data-confirm="ยืนยันบันทึก BU นี้?">
+    {% csrf_token %}<input type="hidden" name="form_type" value="business_unit">{% if editing_bu %}<input type="hidden" name="bu_id" value="{{ editing_bu.pk }}">{% endif %}
+    {% if bu_form.non_field_errors %}<div class="alert">{{ bu_form.non_field_errors }}</div>{% endif %}
+    <div class="form-grid">{% for field in bu_form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }} <span class="required">*</span></label>{{ field }}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+    <div class="budget-form-actions"><button class="button button-primary button-compact" type="submit">{% if editing_bu %}บันทึกการแก้ไข{% else %}เพิ่ม BU{% endif %}</button>{% if editing_bu %}<a class="button button-secondary button-compact" href="{% url 'budget_settings' %}">ยกเลิก</a>{% endif %}</div>
+  </form>
+</details>
+{% endif %}
+
+<section class="card budget-list-card master-table-card" data-master-table>
+  <div class="budget-list-heading"><h2>{% if can_manage_budgets %}Budget ทุกแผนก{% else %}Budget แผนกของฉัน{% endif %}</h2><span>{{ budgets|length }} รายการ</span></div>
+  <div class="form-field"><label for="budget-master-search">ค้นหา Budget</label><input id="budget-master-search" type="search" placeholder="ชื่อ Budget หรือแผนก" data-master-search="budget"></div>
+  <div class="master-table-scroll"><table class="user-table master-table"><thead><tr><th>Expenses/Asset</th><th>Budget</th><th>แผนก</th>{% if can_manage_budgets %}<th>จัดการ</th>{% endif %}</tr></thead><tbody>
+    {% for budget in budgets %}<tr data-master-row data-search="{{ budget.category }} {{ budget.name }} {{ budget.department }}"><td>{{ budget.category }}</td><td><strong>{{ budget.name }}</strong></td><td>{{ budget.department }}</td>{% if can_manage_budgets %}<td><div class="budget-row-actions"><a class="button button-secondary button-compact" href="{% url 'budget_settings' %}?edit={{ budget.pk }}">แก้ไข</a><form method="post" action="{% url 'budget_delete' budget.pk %}" data-confirm="ยืนยันลบ Budget ‘{{ budget.name }}’?">{% csrf_token %}<button class="button button-danger button-compact" type="submit">ลบ</button></form></div></td>{% endif %}</tr>{% endfor %}
+  </tbody></table><p class="budget-empty" data-master-empty hidden>ไม่พบ Budget ที่ตรงกับคำค้นหา</p></div>
+  <div class="master-pager"><span data-master-summary aria-live="polite"></span><div><label>แสดง <select data-master-size aria-label="จำนวน Budget ต่อหน้า"><option>10</option><option>20</option><option>50</option></select> รายการ</label><button class="button button-secondary button-compact" type="button" data-master-prev>ก่อนหน้า</button><span data-master-page></span><button class="button button-secondary button-compact" type="button" data-master-next>ถัดไป</button></div></div>
+</section>
+{% if can_manage_budgets %}
+<section class="card budget-list-card master-table-card" data-master-table>
+  <div class="budget-list-heading"><h2>Business unit (Distribution Rule)</h2><span>{{ business_units.count }} รายการ</span></div>
+  <div class="form-field"><label for="bu-master-search">ค้นหา BU</label><input id="bu-master-search" type="search" placeholder="รหัสหรือชื่อ BU" data-master-search="bu"></div>
+  <div class="master-table-scroll"><table class="user-table master-table"><thead><tr><th>Distribution Rule</th><th>Distribution Rule Name</th>{% if can_manage_budgets %}<th>จัดการ</th>{% endif %}</tr></thead><tbody>
+    {% for unit in business_units %}<tr data-master-row data-search="{{ unit.code }} {{ unit.name }}"><td><strong>{{ unit.code }}</strong></td><td>{{ unit.name }}</td>{% if can_manage_budgets %}<td><div class="budget-row-actions"><a class="button button-secondary button-compact" href="{% url 'budget_settings' %}?edit_bu={{ unit.pk }}">แก้ไข</a><form method="post" action="{% url 'business_unit_delete' unit.pk %}" data-confirm="ยืนยันลบ BU ‘{{ unit.code }}’? จะนำออกจากรายการให้เลือก โดยข้อมูลคำขอเดิมไม่เปลี่ยนแปลง">{% csrf_token %}<button class="button button-danger button-compact" type="submit">ลบ</button></form></div></td>{% endif %}</tr>{% endfor %}
+  </tbody></table><p class="budget-empty" data-master-empty hidden>ไม่พบ BU ที่ตรงกับคำค้นหา</p></div>
+  <div class="master-pager"><span data-master-summary aria-live="polite"></span><div><label>แสดง <select data-master-size aria-label="จำนวน BU ต่อหน้า"><option>10</option><option>20</option><option>50</option></select> รายการ</label><button class="button button-secondary button-compact" type="button" data-master-prev>ก่อนหน้า</button><span data-master-page></span><button class="button button-secondary button-compact" type="button" data-master-next>ถัดไป</button></div></div>
+</section>
+{% endif %}
+<script>
+(() => {
+  document.querySelectorAll('[data-master-table]').forEach(card => {
+    const rows = [...card.querySelectorAll('[data-master-row]')], search = card.querySelector('[data-master-search]'), size = card.querySelector('[data-master-size]');
+    const previous = card.querySelector('[data-master-prev]'), next = card.querySelector('[data-master-next]');
+    let page = 1;
+    const render = () => {
+      const query = search.value.trim().toLocaleLowerCase(), filtered = rows.filter(row => row.dataset.search.toLocaleLowerCase().includes(query)), limit = Number(size.value);
+      const pages = Math.max(1, Math.ceil(filtered.length / limit)); page = Math.min(page, pages);
+      rows.forEach(row => { row.hidden = true; });
+      filtered.slice((page - 1) * limit, page * limit).forEach(row => { row.hidden = false; });
+      card.querySelector('[data-master-empty]').hidden = filtered.length > 0;
+      card.querySelector('[data-master-summary]').textContent = filtered.length ? `${(page - 1) * limit + 1}–${Math.min(page * limit, filtered.length)} จาก ${filtered.length} รายการ` : '0 รายการ';
+      card.querySelector('[data-master-page]').textContent = `${page} / ${pages}`;
+      previous.disabled = page === 1; next.disabled = page === pages;
+    };
+    search.addEventListener('input', () => { page = 1; render(); });
+    size.addEventListener('change', () => { page = 1; render(); });
+    previous.addEventListener('click', () => { page--; render(); }); next.addEventListener('click', () => { page++; render(); });
+    render();
+  });
+})();
+</script>
+{% endblock %}

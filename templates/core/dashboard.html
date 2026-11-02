@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}หน้าหลัก | Petty Cash{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/dashboard-tracker.css' %}?v=20261015-02">
+<style>
+  .dashboard-recent .dashboard-status{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:.18rem .58rem;border:1px solid transparent;border-top-width:3px;border-radius:999px;font-size:.66rem;font-weight:700;line-height:1;white-space:nowrap}
+  .dashboard-recent .status-draft{border-color:#cbd5e1;background:#f1f5f9;color:#64748b}.dashboard-recent .status-pending_supervisor,.dashboard-recent .status-pending_executive{border-color:#f5d78b;background:#fff8e6;color:#a76a00}.dashboard-recent .status-pending_accounting{border-color:#d8c8f4;background:#f5f0ff;color:#7451b6}.dashboard-recent .status-pending_payment{border-color:#b9d9f6;background:#edf7ff;color:#1c6fba}.dashboard-recent .status-paid{border-color:#afe1ea;background:#e9fafd;color:#167d94}.dashboard-recent .status-pending_clearance{border-color:#c4d3f4;background:#eff4ff;color:#4569b8}.dashboard-recent .status-pending_excess_approval{border-color:#efc5e8;background:#fff0fb;color:#a44b96}.dashboard-recent .status-completed{border-color:#a9dfbf;background:#e8f8ef;color:#168155}.dashboard-recent .status-returned{border-color:#f0c692;background:#fff4e6;color:#ae6208}.dashboard-recent .status-rejected{border-color:#f0bbbb;background:#fff0f0;color:#ae3e3e}.dashboard-recent .status-cancelled{border-color:#cbd5e1;background:#eef2f6;color:#5f6f82}
+  .dashboard-recent .status-draft{border-top-color:#94a3b8}.dashboard-recent .status-pending_supervisor,.dashboard-recent .status-pending_executive{border-top-color:#d89a08}.dashboard-recent .status-pending_accounting{border-top-color:#8b68cc}.dashboard-recent .status-pending_payment{border-top-color:#378bda}.dashboard-recent .status-paid{border-top-color:#1f9fbb}.dashboard-recent .status-pending_clearance{border-top-color:#476fd1}.dashboard-recent .status-pending_excess_approval{border-top-color:#c56bba}.dashboard-recent .status-completed{border-top-color:#2e9a5a}.dashboard-recent .status-returned{border-top-color:#dd8333}.dashboard-recent .status-rejected{border-top-color:#c45b5b}.dashboard-recent .status-cancelled{border-top-color:#75869a}
+</style>
+<section class="dashboard-hero"><div class="dashboard-hero-copy"><span class="dashboard-kicker">PETTY CASH · WORKSPACE</span><h1>สวัสดี, {{ user.first_name|default:user.username }}</h1><p>จัดการคำขอเบิก ติดตามสถานะ และทำงานที่รอคุณได้จากที่เดียว</p><div class="dashboard-actions"><a class="button button-primary dashboard-create" href="{% url 'claim_create' %}"><span>+</span> สร้างคำขอเบิก</a><a class="button button-hero-secondary" href="{% url 'claim_list' %}">ดูคำขอทั้งหมด</a></div></div><div class="dashboard-hero-orb" aria-hidden="true"><span>฿</span></div></section>
+{% if signature_required and not user.has_signature %}<section class="dashboard-notice"><span class="dashboard-notice-icon">!</span><div><strong>ตั้งค่าลายเซ็นก่อนเริ่มใช้งาน</strong><p>ลายเซ็นจำเป็นสำหรับเอกสารคำขอที่เสร็จสมบูรณ์</p></div><a href="{% url 'signature_setup' %}">ตั้งค่าตอนนี้ →</a></section>{% endif %}
+<div id="dashboard-tracker-region" data-refresh-url="{% url 'dashboard_claim_tracker' %}" aria-live="polite"{% if not featured_tracking %} hidden{% endif %}>{% include 'core/_claim_tracker.html' %}</div>
+<section class="dashboard-metrics" aria-label="สรุปคำขอ"><a class="dashboard-metric metric-blue" href="{% url 'claim_list' %}{% if not is_system_admin %}?mine=1{% endif %}"><span class="metric-icon">▣</span><div><small>{% if is_system_admin %}คำขอทั้งหมด{% else %}คำขอของฉัน{% endif %}</small><strong>{% if is_system_admin %}{{ my_claim_count }}{% else %}{{ own_claim_count }}{% endif %}</strong><em>ดูรายการทั้งหมด →</em></div></a><a class="dashboard-metric metric-slate" href="{% url 'claim_list' %}?status=DRAFT"><span class="metric-icon">◫</span><div><small>แบบร่าง</small><strong>{{ draft_count }}</strong><em>รอส่งอนุมัติ →</em></div></a><a class="dashboard-metric metric-amber" href="{% url 'approval_queue' %}"><span class="metric-icon">✓</span><div><small>{% if is_system_admin %}งานรอดำเนินการ{% else %}งานรอการอนุมัติ{% endif %}</small><strong>{{ approval_count }}</strong><em>ไปที่คิวงาน →</em></div></a><a class="dashboard-metric metric-green" href="{{ completed_list_url }}"><span class="metric-icon">↗</span><div><small>รายการเสร็จสิ้น</small><strong>{{ completed_count }}</strong><em>ดูเอกสาร →</em></div></a></section>
+{% if can_manage_users %}<section class="dashboard-admin-panel"><div><span class="panel-kicker">ADMINISTRATION</span><h2>เครื่องมือผู้ดูแลระบบ</h2><p>ดูแลผู้ใช้ กำหนดค่าระบบ ตรวจสถานะ และติดตามประวัติการทำงาน</p></div><div class="dashboard-admin-actions"><a href="{% url 'user_list' %}"><b>ผู้ใช้</b><small>จัดการบัญชีและสิทธิ์</small></a><a href="{% url 'system_settings' %}"><b>ตั้งค่าระบบ</b><small>กฎและการเชื่อมต่อ</small></a><a href="{% url 'admin_operations' %}"><b>ศูนย์ควบคุม</b><small>ตรวจระบบและประวัติ</small></a><a href="{% url 'system_overview' %}"><b>ภาพรวมระบบ</b><small>สรุปงานและการใช้งาน</small></a></div></section>{% endif %}
+<section class="dashboard-workspace"><article class="card dashboard-panel dashboard-tasks"><div class="dashboard-panel-head"><div><span class="panel-kicker">YOUR NEXT STEP</span><h2>งานที่รอคุณ</h2></div><a href="{% url 'approval_queue' %}">ดูทั้งหมด →</a></div>{% for claim in actionable_claims %}<a class="dashboard-task" href="{% url 'claim_detail' claim.id %}"><span class="task-mark">{{ forloop.counter }}</span><div><strong>{{ claim.document_number|default:"แบบร่างคำขอ" }}</strong><small>{{ claim.requester.get_full_name|default:claim.requester.username }} · {{ claim.workflow_status_display }}</small></div><b>{{ claim.requested_total|floatformat:2 }} <small>บาท</small></b><span class="task-arrow">→</span></a>{% empty %}<div class="dashboard-empty"><span>✓</span><strong>ไม่มีงานที่รอคุณ</strong><small>งานทั้งหมดดำเนินการเรียบร้อยแล้ว</small></div>{% endfor %}</article><article class="card dashboard-panel dashboard-recent"><div class="dashboard-panel-head"><div><span class="panel-kicker">RECENT ACTIVITY</span><h2>คำขอล่าสุด</h2></div><a href="{% url 'claim_list' %}">ดูทั้งหมด →</a></div>{% for claim in recent_claims %}<a class="dashboard-recent-row" href="{% url 'claim_detail' claim.id %}"><div><strong>{{ claim.document_number|default:"แบบร่าง" }}</strong><small>{{ claim.purpose|truncatechars:38 }}</small></div><span class="dashboard-status status-{{ claim.status|lower }}">{{ claim.workflow_status_display }}</span></a>{% empty %}<div class="dashboard-empty"><span>฿</span><strong>ยังไม่มีคำขอเบิก</strong><small>เริ่มต้นด้วยการสร้างคำขอรายการแรก</small></div>{% endfor %}</article></section>
+<section class="card dashboard-status-panel"><div class="dashboard-panel-head"><div><span class="panel-kicker">REQUEST PIPELINE</span><h2>{% if is_system_admin %}ภาพรวมทุกสถานะ{% elif requester_summary %}ติดตามคำขอของคุณ{% else %}ติดตามคำขอและงานของคุณ{% endif %}</h2></div><a class="button button-secondary button-compact" href="{% url 'claim_list' %}">เปิดรายการทั้งหมด</a></div><div class="dashboard-status-grid{% if requester_summary %} dashboard-status-grid-requester{% endif %}">{% for card in status_cards %}<a class="dashboard-status-card status-{{ card.class }}" href="{{ card.url }}"><span>{{ card.label }}</span><strong>{{ card.count }}</strong><i>ดูรายการ →</i></a>{% endfor %}</div></section>
+<script>
+  (() => {
+    const region = document.getElementById('dashboard-tracker-region');
+    if (!region) return;
+    let loading = false;
+    let lastMarkup = null;
+    const refresh = async () => {
+      if (loading || document.visibilityState !== 'visible') return;
+      loading = true;
+      try {
+        const response = await fetch(region.dataset.refreshUrl, {cache: 'no-store', credentials: 'same-origin'});
+        if (!response.ok || response.redirected) return;
+        const html = await response.text();
+        if (html !== lastMarkup) {
+          region.innerHTML = html;
+          lastMarkup = html;
+        }
+        region.hidden = !html.trim();
+      } catch (_) {
+        // Keep the last known status visible when the network is unavailable.
+      } finally {
+        loading = false;
+      }
+    };
+    window.setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+  })();
+</script>
+{% endblock %}

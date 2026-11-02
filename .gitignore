@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Django / local runtime
+db.sqlite3
+media/
+staticfiles/
+.env
+
+# IDE / OS
+.vscode/
+.idea/
+*.log
+*.err
+Thumbs.db
+
+# Credentials supplied outside the source repository
+ADAuthen.md

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}รายละเอียดคำขอ | Petty Cash{% endblock %}
+{% block content %}
+  {% include 'claims/components/exposure_references.html' %}
+  {% if can_submit_clearance %}
+  <section class="card approval-action-card"><span class="eyebrow">เบิกยืมเงิน</span><h2>ลงยอดใช้จริง</h2><p class="muted">ระบุยอดใช้จริงแต่ละรายการและแนบหลักฐาน หากใช้เกินยอดยืม ระบบจะส่งผู้จัดการบัญชีอนุมัติส่วนต่างก่อน และส่ง CFO อนุมัติต่อเมื่อเข้าเกณฑ์</p>
+    <form method="post" action="{% url 'claim_clearance_submit' claim.id %}" enctype="multipart/form-data">{% csrf_token %}
+      {% for item in claim.items.all %}<div class="claim-clearance-line"><strong>{{ item.description }} · ขอ {{ item.requested_amount|floatformat:2 }} บาท</strong><div class="form-field clearance-amount-field"><label for="actual-{{ item.id }}">ยอดใช้จริง <span class="required">*</span></label><input id="actual-{{ item.id }}" name="actual_{{ item.id }}" type="number" min="0" step="0.01" required value="{{ item.actual_amount|default_if_none:'' }}"></div></div>{% endfor %}
+      <div class="form-field clearance-document-field"><label for="clearance-attachments">ไฟล์แนบ <span class="required">*</span></label><input id="clearance-attachments" name="attachments" type="file" multiple accept=".pdf,.jpg,.jpeg,.png" hidden><label class="attachment-picker" for="clearance-attachments"><span class="attachment-picker-icon">+</span><span><strong>เพิ่มไฟล์แนบ</strong><small>PDF, JPG หรือ PNG · สูงสุด {{ max_attachment_count }} ไฟล์ · ไฟล์ละไม่เกิน 10 MB</small></span></label><div id="clearance-selected-attachments" class="selected-attachments" aria-live="polite"></div><small>ต้องมีไฟล์ประกอบอย่างน้อย 1 ไฟล์{% if claim.attachments.count %} · มีไฟล์เดิม {{ claim.attachments.count }} ไฟล์แล้ว{% endif %}</small><span id="clearance-attachment-required-error" class="field-error" role="alert" hidden>กรุณาแนบหลักฐานยอดใช้จริงอย่างน้อย 1 ไฟล์</span></div>
+      <button class="button button-primary clearance-submit-button" type="submit" data-confirm="ยืนยันส่งยอดใช้จริง? หากยอดเกิน ระบบจะส่งผู้จัดการบัญชีและ CFO อนุมัติตามเกณฑ์">ส่งยอดใช้จริง</button>
+    </form>
+  </section>
+  {% endif %}
+  {% if can_review_clearance %}<section class="card approval-action-card accountant-review-card"><span class="eyebrow">เจ้าหน้าที่บัญชี</span><h2>ตรวจยอดใช้จริงและปิดรายการ</h2><p class="muted">ยอดยืม {{ claim.requested_total|floatformat:2 }} บาท · ใช้จริง {{ claim.actual_total|floatformat:2 }} บาท · ส่วนต่าง {{ settlement_amount|floatformat:2 }} บาท</p>{% if claim.clearance_note %}<p>{{ claim.clearance_note }}</p>{% endif %}<form method="post" action="{% url 'claim_complete' claim.id %}" data-confirm="ยืนยันตรวจยอดและปิดรายการ?">{% csrf_token %}{% if claim.actual_total < claim.requested_total %}<label class="refund-confirmation"><input type="checkbox" name="refund_confirmed" value="1" required> ยืนยันว่าได้รับเงินเหลือคืน {{ settlement_amount|floatformat:2 }} บาทแล้ว</label>{% endif %}<button class="button button-primary accountant-review-button" type="submit">ตรวจแล้ว ปิดรายการ</button></form></section>{% endif %}
+  {% if can_correct_actual %}<section class="card approval-action-card accountant-review-card"><span class="eyebrow">เจ้าหน้าที่บัญชี</span><h2>แก้ยอดใช้จริง</h2><p class="muted">ใช้เมื่อยอดที่ผู้ขอลงไม่ตรงหลักฐาน ระบบจะบันทึกยอดก่อนและหลังแก้ไขไว้ในประวัติ{% if claim.status == 'PENDING_PAYMENT' %} กรุณาตรวจให้ถูกก่อนจ่ายส่วนต่าง{% endif %}</p><form method="post" action="{% url 'claim_clearance_correct' claim.id %}" data-confirm="ยืนยันแก้ยอดใช้จริงตามเอกสาร?">{% csrf_token %}{% for item in claim.items.all %}<div class="claim-clearance-line"><strong>{{ item.description }} · ขอ {{ item.requested_amount|floatformat:2 }} บาท</strong><div class="form-field clearance-amount-field"><label for="corrected-actual-{{ item.id }}">ยอดใช้จริงที่ถูกต้อง <span class="required">*</span></label><input id="corrected-actual-{{ item.id }}" name="corrected_actual_{{ item.id }}" type="number" min="0" step="0.01" required value="{{ item.actual_amount|default_if_none:'' }}"></div></div>{% endfor %}<div class="form-field"><label for="correction-note">หมายเหตุการแก้ไข <small>(ถ้ามี)</small></label><textarea id="correction-note" name="correction_note" rows="2" placeholder="เช่น ยอดในใบเสร็จไม่ตรงกับที่ผู้ขอลง"></textarea></div><button class="button button-secondary accountant-review-button" type="submit">บันทึกยอดที่แก้ไข</button></form></section>{% endif %}
+  {% if can_cancel_after_refund %}<section class="card approval-action-card"><details class="claim-cancel-panel"><summary>ยกเลิกกรณีคืนเงินยืมครบโดยไม่ได้ใช้</summary><form method="post" action="{% url 'claim_cancel_after_refund' claim.id %}" data-confirm="ยืนยันยกเลิกและรับเงินคืนครบ?">{% csrf_token %}<label class="refund-confirmation"><input type="checkbox" name="refund_confirmed" value="1" required> ได้รับเงินคืนครบ {{ claim.requested_total|floatformat:2 }} บาทแล้ว</label><div class="form-field"><label for="cancel-reason">เหตุผล *</label><textarea id="cancel-reason" name="cancel_reason" required></textarea></div><button class="button button-danger" type="submit">ยกเลิกรายการ</button></form></details></section>{% endif %}
+  <section class="dashboard-header"><div><span class="eyebrow">{{ claim.workflow_status_display }}</span><h1>{{ claim.document_number|default:"แบบร่างคำขอเบิก" }}</h1><p class="muted">สร้างเมื่อ {{ claim.created_at|date:"j M Y H:i" }}</p></div>{% if claim.status == 'DRAFT' or claim.status == 'RETURNED' %}<div class="dashboard-actions"><a class="button button-primary" href="{% url 'claim_edit' claim.id %}">{% if claim.status == 'DRAFT' %}แก้ไขแบบร่าง{% else %}แก้ไขตามที่ส่งกลับ{% endif %}</a><form method="post" action="{% url 'claim_submit' claim.id %}" data-confirm="ยืนยันส่งคำขอนี้เข้าตามลำดับผู้อนุมัติ Budget และผู้อนุมัติของผู้ขอ?">{% csrf_token %}<button class="button button-primary" type="submit">ส่งอนุมัติ</button></form>{% if claim.status == 'DRAFT' %}<form method="post" action="{% url 'claim_delete' claim.id %}" data-confirm="ยืนยันลบแบบร่างนี้? การลบไม่สามารถย้อนกลับได้">{% csrf_token %}<button class="button button-danger" type="submit">ลบแบบร่าง</button></form>{% endif %}</div>{% endif %}</section>
+  <section class="card detail-card">
+    <dl class="detail-grid">
+      <div><dt>ประเภท</dt><dd>{{ claim.get_request_type_display }}</dd></div>
+      <div><dt>ผู้ขอเบิก</dt><dd>{{ claim.requester.get_full_name|default:claim.requester.username }} ({{ claim.requester.get_position_level_display }})</dd></div>
+      <div><dt>แผนกผู้ขอ</dt><dd>{{ claim.requester.department|default:"-" }}</dd></div>
+      <div><dt>{% if claim.executive and not claim.supervisor %}ผู้บริหารตามสาย (คำขอเดิม){% else %}ผู้อนุมัติ{% endif %}</dt><dd>{% if claim.supervisor %}{{ claim.supervisor.get_full_name|default:claim.supervisor.username }}{% elif claim.executive %}{{ claim.executive.get_full_name|default:claim.executive.username }}{% else %}ยังไม่กำหนด{% endif %}</dd></div>
+      <div><dt>ผู้จัดการบัญชี</dt><dd>{% if claim.accounting_manager %}{{ claim.accounting_manager.get_full_name|default:claim.accounting_manager.username }}{% else %}-{% endif %}</dd></div>
+      <div><dt>CFO</dt><dd>{% if claim.cfo %}{{ claim.cfo.get_full_name|default:claim.cfo.username }}{% if not claim.requires_cfo_approval and not claim.requires_cfo_excess_approval %} (รับทราบ){% endif %}{% else %}ยังไม่กำหนด{% endif %}</dd></div>
+      {% if claim.daily_requested_total is not None %}<div><dt>{% if claim.amount_revision %}ยอดสะสมใช้อนุมัติหลังแก้ยอด{% else %}ยอดสะสมใช้อนุมัติ ณ ยื่นคำขอ{% endif %}</dt><dd>{{ claim.daily_requested_total|floatformat:2 }} บาท</dd><small class="muted">รวมยอดวันเดียวกันและยอดค้างจ่ายข้ามวัน ณ ยื่นอนุมัติ</small></div>{% endif %}
+      {% if claim.completed_daily_actual_total is not None %}<div><dt>ยอดใช้จริงสะสมของวันที่ขอเบิก ({{ claim.request_date|date:"d/m/Y" }})</dt><dd>{{ claim.completed_daily_actual_total|floatformat:2 }} บาท</dd><small class="muted">เฉพาะคำขอของผู้ขอคนนี้ที่ปิดรายการแล้วและมียอดใช้จริง ไม่ใช่ยอด ณ ยื่นอนุมัติ</small></div>{% endif %}
+      <div><dt>เจ้าหน้าที่บัญชี</dt><dd>{% if claim.accountant %}{{ claim.accountant.get_full_name|default:claim.accountant.username }}{% else %}ยังไม่กำหนด{% endif %}</dd></div>
+      <div><dt>สถานที่</dt><dd>{{ claim.location_display }}</dd></div>
+      <div><dt>วัตถุประสงค์</dt><dd>{{ claim.purpose }}</dd></div>
+      {% if claim.expense_month %}<div><dt>ค่าใช้จ่ายของเดือน</dt><dd>{{ claim.expense_month_display }}</dd></div>{% endif %}
+    </dl>
+  </section>
+  {% if claim.budget_approvals.exists %}<section class="card"><h2>ผู้อนุมัติ Budget แผนกอื่น</h2><div class="budget-approval-list">{% for approval in claim.budget_approvals.all %}<div><strong>{{ approval.department }}</strong><span>{{ approval.approver.get_full_name|default:approval.approver.username }}</span><small>{% if approval.approved_at %}อนุมัติแล้ว{% else %}รออนุมัติ{% endif %}</small></div>{% endfor %}</div></section>{% endif %}
+  {% if cfo_ack_stage %}<section class="card approval-action-card"><span class="eyebrow">CFO · รับทราบ</span><h2>{% if cfo_ack_stage == 'excess' %}รับทราบยอดใช้เกิน{% else %}รับทราบคำขอ{% endif %}</h2><p class="muted">การรับทราบนี้ไม่ใช่การอนุมัติ และไม่หยุดขั้นตอนของคำขอ</p><form method="post" action="{% url 'claim_cfo_acknowledge' claim.id %}" data-confirm="ยืนยันรับทราบคำขอนี้? ระบบจะแจ้งในกลุ่ม Telegram เมื่อบันทึกสำเร็จ">{% csrf_token %}<input type="hidden" name="stage" value="{{ cfo_ack_stage }}"><button class="button button-primary" type="submit">รับทราบ</button></form></section>{% endif %}
+  <section class="card claim-items-card"><div class="items-heading"><h2>รายการขอเบิก</h2><strong>{{ claim.requested_total|floatformat:2 }} บาท</strong></div><div class="user-table-wrap"><table class="user-table"><thead><tr><th>รายการ</th><th>BU</th><th>แผนก</th><th>Budget</th><th>ยอดขอ</th>{% if claim.actual_total is not None %}<th>ยอดใช้จริง</th>{% endif %}</tr></thead><tbody>{% for item in claim.items.all %}<tr><td>{{ item.description }}{% if item.actual_description %}<small>ใช้จริง: {{ item.actual_description }}</small>{% endif %}</td><td>{{ item.business_unit|default:claim.business_unit }}</td><td>{{ item.department|default:claim.department }}</td><td>{{ item.budget|default:claim.budget }}</td><td>{{ item.requested_amount|floatformat:2 }} บาท</td>{% if claim.actual_total is not None %}<td>{{ item.actual_amount|floatformat:2 }} บาท</td>{% endif %}</tr>{% endfor %}</tbody></table></div></section>
+  {% if can_view_actual %}<section class="card actual-summary-card"><div><span>ยอดที่ขอเบิก</span><strong>{{ claim.requested_total|floatformat:2 }} บาท</strong></div><div><span>ยอดใช้จริง</span><strong>{{ claim.actual_total|floatformat:2 }} บาท</strong></div><div><span>{% if has_excess %}ยอดจ่ายเพิ่ม{% else %}เงินทอน{% endif %}</span><strong>{{ settlement_amount|floatformat:2 }} บาท</strong></div></section>{% endif %}
+  {% if can_approve %}<section class="card approval-action-card"><span class="eyebrow">งานรอการดำเนินการ</span><h2>ตัดสินใจคำขอ</h2><p class="muted">{% if claim.status == 'PENDING_BUDGET_APPROVAL' %}อนุมัติ Budget ของแผนกคุณ หรือไม่อนุมัติพร้อมเหตุผลเพื่อส่งกลับให้ผู้ขอแก้ไข{% else %}อนุมัติเพื่อส่งงานขั้นถัดไป หรือส่งกลับ/ไม่อนุมัติพร้อมเหตุผล{% endif %}</p><form method="post" action="{% url 'claim_approval_action' claim.id %}">{% csrf_token %}<div class="form-field"><label for="approval-comment">เหตุผลหรือหมายเหตุ <small>(บังคับเมื่อส่งกลับหรือไม่อนุมัติ)</small></label><textarea id="approval-comment" name="comment" rows="3" placeholder="ระบุเหตุผลเมื่อจำเป็น"></textarea></div><div class="dashboard-actions"><button class="button button-primary" name="action" value="approve" data-confirm="ยืนยันอนุมัติคำขอนี้?" type="submit">อนุมัติ</button>{% if claim.status != 'PENDING_BUDGET_APPROVAL' %}<button class="button button-secondary" name="action" value="return" data-confirm="ยืนยันส่งคำขอกลับให้ผู้ขอแก้ไข?" type="submit">ส่งกลับแก้ไข</button>{% endif %}<button class="button button-danger" name="action" value="reject" data-confirm="ยืนยันไม่อนุมัติคำขอนี้?{% if claim.status == 'PENDING_BUDGET_APPROVAL' %} คำขอจะกลับไปให้ผู้ขอแก้ไข{% endif %}" type="submit">ไม่อนุมัติ</button></div></form></section>{% endif %}
+  {% if can_correct_requested %}{% include 'claims/_petty_amount_correction.html' %}{% endif %}
+  {% if can_pay %}<section class="card approval-action-card"><span class="eyebrow">เจ้าหน้าที่บัญชี</span>{% if has_excess %}<h2>บันทึกจ่ายเงินส่วนต่าง</h2><p class="muted">อนุมัติส่วนต่างครบตามลำดับแล้ว จ่ายเพิ่ม {{ settlement_amount|floatformat:2 }} บาท แล้วรอผู้ขอยืนยันรับเงินก่อนปิดรายการ</p>{% elif claim.request_type == 'PETTY_CASH' %}<h2>บันทึกจ่ายเงินสดย่อย</h2><p class="muted">หลังจ่ายเงิน ผู้ขอต้องยืนยันรับเงินก่อนปิดรายการ</p>{% else %}<h2>บันทึกจ่ายเงินยืม</h2><p class="muted">หลังจ่ายเงิน ผู้ขอยืนยันรับและลงรายละเอียดใช้จริง</p>{% endif %}<form method="post" action="{% url 'claim_payment' claim.id %}" enctype="multipart/form-data" data-confirm="ยืนยันบันทึกการจ่ายเงิน?">{% csrf_token %}<input type="hidden" name="amount_revision" value="{{ claim.amount_revision }}"><div class="form-field"><label for="payment-method">วิธีการจ่ายเงิน <span class="required">*</span></label><select id="payment-method" name="payment_method" required><option value="">เลือกวิธีจ่ายเงิน</option><option value="TRANSFER">โอนเงิน</option><option value="CASH">เงินสด</option></select></div><div class="form-field payment-slip-field" id="payment-slip-field" hidden><label for="payment-slip">สลิปการโอน <span class="required">*</span></label><input id="payment-slip" name="payment_slip" type="file" accept=".pdf,.jpg,.jpeg,.png" aria-describedby="payment-slip-error" hidden><label class="attachment-picker" for="payment-slip" tabindex="0" role="button" aria-describedby="payment-slip-error"><span class="attachment-picker-icon">+</span><span><strong>แนบสลิปการโอน</strong><small>PDF, JPG หรือ PNG · ไฟล์ละไม่เกิน 10 MB</small></span></label><small id="payment-slip-name">ยังไม่ได้เลือกไฟล์</small><small>เมื่อเลือกโอนเงิน ต้องแนบสลิปก่อนบันทึกจ่ายเงิน</small><span id="payment-slip-error" class="field-error" role="alert" tabindex="-1" hidden>กรุณาแนบสลิปการโอนก่อนบันทึกจ่ายเงิน</span></div><button class="button button-primary" type="submit">{% if has_excess %}บันทึกจ่ายเงินส่วนต่าง{% elif claim.request_type == 'PETTY_CASH' %}บันทึกจ่ายเงินสดย่อย{% else %}บันทึกจ่ายเงินยืม{% endif %}</button></form></section>{% endif %}
+  {% if can_view_payments and claim.payments.all %}<section class="card payment-history"><h2>ประวัติการจ่ายเงิน</h2><div class="attachment-list">{% for payment in claim.payments.all %}<article class="attachment-item"><span class="attachment-file-icon" aria-hidden="true">฿</span><div class="attachment-file-info"><strong>{{ payment.get_kind_display }} · {{ payment.amount|floatformat:2 }} บาท</strong><small><strong class="payment-method" style="color:var(--slate-900);font-weight:700;">{{ payment.get_method_display }}</strong> · {{ payment.paid_by.get_full_name|default:payment.paid_by.username }} · {{ payment.created_at|date:"j M Y H:i" }}</small>{% if payment.slip %}<small title="{{ payment.slip_original_name }}">{{ payment.slip_original_name|default:"สลิปการโอน" }}</small>{% endif %}</div>{% if payment.slip %}<div class="attachment-actions"><button class="button button-secondary button-compact attachment-preview-trigger" type="button" data-preview-url="{% url 'claim_payment_slip_preview' claim.id payment.id %}" data-file-name="{{ payment.slip_original_name|default:payment.slip.name }}">พรีวิว</button><a class="button button-primary button-compact" href="{% url 'claim_payment_slip_download' claim.id payment.id %}">ดาวน์โหลด</a></div>{% endif %}</article>{% endfor %}</div></section>{% endif %}
+  {% if can_confirm_receipt %}
+  <section class="card approval-action-card"><span class="eyebrow">รอการดำเนินการของคุณ</span>
+    <h2>ยืนยันรับเงิน{% if claim.latest_payment_is_supplemental %}ส่วนต่าง{% endif %}</h2>
+    <p class="muted">ยอดที่รอยืนยัน {{ claim.receipt_amount|floatformat:2 }} บาท · ตรวจสอบว่าคุณได้รับเงินจริงครบถ้วนแล้ว{% if claim.receipt_closes_claim %} จากนั้นยืนยันเพื่อปิดรายการ{% else %} จากนั้นยืนยันเพื่อส่งรายการเข้าสู่ขั้นตอนรอเคลียร์{% endif %}{% if auto_receive_enabled %} หากไม่กดยืนยันภายใน {{ receipt_after_days }} วันหลังบัญชีจ่ายเงินรอบนี้ ระบบจะถือว่ารับเงินแล้วและ{% if claim.receipt_closes_claim %}ปิดรายการ{% else %}ส่งไปรอเคลียร์{% endif %}โดยอัตโนมัติ หากยังไม่ได้รับเงินจริง กรุณาติดต่อเจ้าหน้าที่บัญชี{% endif %}</p>
+    <form method="post" action="{% url 'claim_receipt_confirm' claim.id %}" data-confirm="ยืนยันว่าได้รับเงิน{% if claim.latest_payment_is_supplemental %}ส่วนต่าง{% endif %} {{ claim.receipt_amount|floatformat:2 }} บาทแล้ว?">{% csrf_token %}
+      {% if claim.latest_payment_event %}<input type="hidden" name="payment_event_id" value="{{ claim.latest_payment_event.pk }}">{% endif %}
+      <button class="button button-primary" type="submit">ยืนยันรับเงิน{% if claim.latest_payment_is_supplemental %}ส่วนต่าง{% endif %}</button>
+    </form>
+  </section>
+  {% endif %}
+  {% if can_complete %}<section class="card approval-action-card"><span class="eyebrow">รอการดำเนินการของบัญชี</span><h2>ตรวจเอกสารและปิดรายการ</h2><p class="muted">ระบุยอดใช้จริงจากบิลตัวจริง หากยอดเกินยอดเบิก ระบบจะส่งผู้จัดการบัญชีอนุมัติส่วนต่างก่อนให้เจ้าหน้าที่จ่ายเพิ่มและปิดรายการ</p><form method="post" action="{% url 'claim_complete' claim.id %}" enctype="multipart/form-data" data-confirm="ยืนยันว่าได้รับเอกสารตัวจริงครบถ้วน?">{% csrf_token %}<div class="form-field actual-total-field"><label for="actual-total">จำนวนที่ใช้จริง <span class="required">*</span></label><input id="actual-total" name="actual_total" type="number" min="0" step="0.01" required placeholder="0.00" value="{{ claim.actual_total|default_if_none:'' }}"><small>ยอดที่ใช้จริงจากบิลตัวจริง (ยอดที่ขอ {{ claim.requested_total|floatformat:2 }} บาท)</small></div><div class="form-field actual-total-field"><label for="excess-reason">เหตุผลกรณียอดเกิน <small>(ต้องระบุเมื่อยอดใช้จริงเกินยอดเบิก)</small></label><textarea id="excess-reason" name="excess_reason" rows="3" placeholder="เช่น ค่าใช้จ่ายจริงเพิ่มจากรายการที่จำเป็น">{{ claim.excess_reason }}</textarea></div><div class="form-field actual-total-field clearance-attachment-field"><label>ไฟล์แนบ <small>(ถ้ามี)</small></label><input id="completion-attachments" name="attachments" type="file" multiple accept=".pdf,.jpg,.jpeg,.png" hidden><label class="attachment-picker" for="completion-attachments"><span class="attachment-picker-icon">+</span><span><strong>เพิ่มไฟล์แนบ</strong><small>PDF, JPG หรือ PNG · สูงสุด 5 ไฟล์ · ไฟล์ละไม่เกิน 10 MB</small></span></label><div id="completion-selected-attachments" class="selected-attachments" aria-live="polite"></div><small>แนบใบเสร็จหรือเอกสารประกอบการเคลียร์ได้ตามต้องการ{% if claim.attachments.count %} (มีไฟล์เดิม {{ claim.attachments.count }} ไฟล์){% endif %}</small></div><button class="button button-primary" type="submit">ยืนยันเอกสารและดำเนินการต่อ</button></form>{% if can_cancel_after_refund %}<details class="claim-cancel-panel"><summary>ยกเลิกคำขอกรณีผู้ขอคืนเงินครบจำนวน</summary><div><p>ใช้เฉพาะกรณีผู้ขอไม่ได้ใช้เงินและเจ้าหน้าที่บัญชีได้รับเงินคืนครบ <strong>{{ claim.requested_total|floatformat:2 }} บาท</strong> แล้ว</p><form method="post" action="{% url 'claim_cancel_after_refund' claim.id %}" data-confirm="ยืนยันว่าได้รับเงินคืนครบจำนวนและยกเลิกคำขอนี้?">{% csrf_token %}<label class="refund-confirmation"><input type="checkbox" name="refund_confirmed" value="1" required> ยืนยันว่าได้รับเงินคืนครบจำนวน {{ claim.requested_total|floatformat:2 }} บาทแล้ว</label><div class="form-field"><label for="cancel-reason">เหตุผลการยกเลิก <span class="required">*</span></label><textarea id="cancel-reason" name="cancel_reason" rows="2" required placeholder="เช่น ผู้ขอไม่ได้ใช้เงินและคืนเงินครบจำนวน"></textarea></div><button class="button button-danger" type="submit">ยืนยันรับเงินคืนและยกเลิกคำขอ</button></form></div></details>{% endif %}</section>{% endif %}
+  {% if can_print %}<section class="card attachment-card"><h2>เอกสารสำหรับพิมพ์</h2><p class="muted">รายการเสร็จสิ้นแล้ว สามารถเปิดเอกสารพร้อมลายเซ็นเพื่อพิมพ์หรือบันทึกเป็น PDF ได้</p><a class="button button-primary print-document-button" href="{% url 'claim_print' claim.id %}" target="_blank" rel="noopener">เปิดเอกสารสำหรับพิมพ์</a></section>{% endif %}
+  <section class="card attachment-card">
+    <div class="attachment-heading"><div><h2>ไฟล์แนบ</h2><p class="muted">เอกสารประกอบคำขอนี้</p></div>{% if claim.attachments.all %}<span class="attachment-count">{{ claim.attachments.count }} ไฟล์</span>{% endif %}</div>
+    {% if claim.attachments.all %}<div class="attachment-list">
+      {% for attachment in claim.attachments.all %}<article class="attachment-item">
+        <span class="attachment-file-icon" aria-hidden="true">⌁</span>
+        <div class="attachment-file-info"><strong title="{{ attachment.original_name }}">{{ attachment.original_name }}</strong><small>{% if attachment.uploaded_by_id == claim.requester_id %}ผู้ขอแนบ{% elif attachment.uploaded_by_id == claim.accountant_id %}บัญชีแนบ{% else %}แนบโดย{% endif %}: {{ attachment.uploaded_by.get_full_name|default:attachment.uploaded_by.username }} · {{ attachment.created_at|date:"j M Y H:i" }}</small></div>
+        <div class="attachment-actions"><button class="button button-secondary button-compact attachment-preview-trigger" type="button" data-preview-url="{% url 'claim_attachment_preview' claim.id attachment.id %}" data-file-name="{{ attachment.original_name }}">พรีวิว</button><a class="button button-primary button-compact" href="{% url 'claim_attachment_download' claim.id attachment.id %}">ดาวน์โหลด</a></div>
+      </article>{% endfor %}
+    </div>{% else %}<p class="attachment-empty">ยังไม่มีไฟล์แนบในคำขอนี้</p>{% endif %}
+  </section>
+  {% if claim.approval_records.all %}<section class="card approval-history"><h2>ประวัติการดำเนินการ</h2>{% for record in claim.approval_records.all %}<div class="history-row history-{{ record.action|lower }}"><span class="history-icon" aria-hidden="true">{% if record.action == 'SUBMITTED' or record.action == 'EXCESS_SUBMITTED' %}↑{% elif record.action == 'RETURNED' %}↩{% elif record.action == 'REJECTED' or record.action == 'CANCELLED' %}×{% elif record.action == 'PAID' or record.action == 'SUPPLEMENTAL_PAID' %}฿{% else %}✓{% endif %}</span><div class="history-content"><strong>{{ record.get_action_display }}</strong><span>{% if record.actor %}{{ record.actor.get_full_name|default:record.actor.username }}{% else %}ระบบอัตโนมัติ{% endif %} · {{ record.created_at|date:"j M Y H:i" }}</span>{% if record.comment %}<p>{{ record.comment }}</p>{% endif %}</div></div>{% endfor %}</section>{% endif %}
+  <dialog class="attachment-preview-panel" id="attachment-preview-panel" aria-labelledby="attachment-preview-title">
+    <div class="attachment-preview-header">
+      <div><small>พรีวิวไฟล์แนบ</small><h2 id="attachment-preview-title"></h2></div>
+      <button class="attachment-preview-close" type="button" aria-label="ปิดพรีวิว">×</button>
+    </div>
+    <div class="attachment-preview-content">
+      <img id="attachment-preview-image" alt="" hidden>
+      <iframe id="attachment-preview-pdf" title="พรีวิวไฟล์ PDF" hidden></iframe>
+    </div>
+  </dialog>
+  <script>
+  (() => {
+    const previewPanel = document.getElementById('attachment-preview-panel');
+    const previewImage = document.getElementById('attachment-preview-image');
+    const previewPdf = document.getElementById('attachment-preview-pdf');
+    const previewTitle = document.getElementById('attachment-preview-title');
+    const closePreview = () => {
+      previewPanel.close();
+      previewImage.removeAttribute('src');
+      previewPdf.removeAttribute('src');
+    };
+    document.querySelectorAll('.attachment-preview-trigger').forEach(button => {
+      button.addEventListener('click', () => {
+        const fileName = button.dataset.fileName;
+        const isPdf = /\.pdf$/i.test(fileName);
+        previewTitle.textContent = fileName;
+        previewImage.hidden = isPdf;
+        previewPdf.hidden = !isPdf;
+        if (isPdf) previewPdf.src = button.dataset.previewUrl;
+        else { previewImage.alt = fileName; previewImage.src = button.dataset.previewUrl; }
+        if (!previewPanel.open) previewPanel.show();
+      });
+    });
+    previewPanel.querySelector('.attachment-preview-close').addEventListener('click', closePreview);
+    previewPanel.addEventListener('keydown', event => { if (event.key === 'Escape') closePreview(); });
+    const existingCount = {{ claim.attachments.count }};
+    const maxFiles = {{ max_attachment_count }};
+    const bindAttachmentPicker = (inputId, selectedId, requiredErrorId = null) => {
+      const input = document.getElementById(inputId), selected = document.getElementById(selectedId);
+      if (!input || !selected) return;
+      const requiredError = requiredErrorId ? document.getElementById(requiredErrorId) : null;
+      let files = [];
+      const sync = () => { const transfer = new DataTransfer(); files.forEach(file => transfer.items.add(file)); input.files = transfer.files; };
+      const render = () => {
+        selected.innerHTML = '';
+        files.forEach((file, index) => {
+          const row = document.createElement('div'); row.className = 'attachment-row';
+          const name = document.createElement('span'); name.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+          const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'attachment-remove'; remove.textContent = 'ลบ';
+          remove.addEventListener('click', () => { files.splice(index, 1); sync(); render(); });
+          row.append(name, remove); selected.appendChild(row);
+        });
+        if (requiredError && (files.length || existingCount)) requiredError.hidden = true;
+      };
+      input.addEventListener('change', () => {
+        const incoming = Array.from(input.files);
+        if (existingCount + files.length + incoming.length > maxFiles) {
+          alert(`แนบไฟล์ได้รวมไม่เกิน ${maxFiles} ไฟล์ต่อคำขอ (เพิ่มได้อีก ${Math.max(0, maxFiles - existingCount - files.length)} ไฟล์)`);
+          sync(); return;
+        }
+        files.push(...incoming); sync(); render();
+      });
+      if (requiredError) input.closest('form')?.addEventListener('submit', event => {
+        if (!existingCount && !files.length) {
+          event.preventDefault(); requiredError.hidden = false;
+          requiredError.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+      });
+    };
+    bindAttachmentPicker('clearance-attachments', 'clearance-selected-attachments', 'clearance-attachment-required-error');
+    bindAttachmentPicker('completion-attachments', 'completion-selected-attachments');
+    const paymentMethod = document.getElementById('payment-method');
+    if (paymentMethod) {
+      const slipField = document.getElementById('payment-slip-field');
+      const slipInput = document.getElementById('payment-slip');
+      const slipName = document.getElementById('payment-slip-name');
+      const slipError = document.getElementById('payment-slip-error');
+      const slipPicker = slipField.querySelector('label.attachment-picker');
+      const clearSlipError = () => { slipError.hidden = true; slipInput.removeAttribute('aria-invalid'); };
+      const showSlipError = () => {
+        slipError.hidden = false;
+        slipInput.setAttribute('aria-invalid', 'true');
+        slipError.scrollIntoView({behavior: 'smooth', block: 'center'});
+        slipPicker.focus({preventScroll: true});
+      };
+      const syncPaymentMethod = () => {
+        const transfer = paymentMethod.value === 'TRANSFER';
+        slipField.hidden = !transfer;
+        slipInput.required = transfer;
+        if (!transfer) { slipInput.value = ''; slipName.textContent = 'ยังไม่ได้เลือกไฟล์'; clearSlipError(); }
+      };
+      paymentMethod.addEventListener('change', syncPaymentMethod);
+      slipInput.addEventListener('invalid', event => {
+        event.preventDefault();
+        if (paymentMethod.value === 'TRANSFER' && !slipInput.files.length) showSlipError();
+      });
+      slipInput.addEventListener('change', () => {
+        slipName.textContent = slipInput.files[0]?.name || 'ยังไม่ได้เลือกไฟล์';
+        if (slipInput.files.length) clearSlipError();
+      });
+      slipPicker.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); slipInput.click(); }
+      });
+      paymentMethod.closest('form').addEventListener('submit', event => {
+        if (paymentMethod.value === 'TRANSFER' && !slipInput.files.length) {
+          event.preventDefault(); showSlipError();
+        }
+      });
+      syncPaymentMethod();
+    }
+  })();
+  </script>
+{% endblock %}

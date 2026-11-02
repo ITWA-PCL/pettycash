@@ -1,0 +1,287 @@
+{% load static %}
+<!doctype html>
+<html lang="th"{% if user.is_authenticated and user.theme_preference == 'DARK' %} class="dark-mode"{% endif %}>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Petty Cash{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{% static 'img/Petty Cash Form.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'img/Petty Cash Form.png' %}">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261030-01">
+    <script src="{% static 'js/searchable-select.js' %}?v=20261019-01"></script>
+  </head>
+  <body>
+    {% if user.is_authenticated %}
+      <header class="topbar">
+        <a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark">฿</span> Petty Cash</a>
+        <nav class="topbar-actions">
+          <span class="user-name">{{ user.get_full_name|default:user.username }}</span>
+          <div class="notification-menu" data-feed-url="{% url 'notification_feed' %}">
+            <button class="notification-trigger topbar-icon-button" id="notification-trigger" type="button" aria-label="การแจ้งเตือน" aria-expanded="false" aria-controls="notification-popover" title="การแจ้งเตือน">
+              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+              {% if unread_notification_count %}<b>{{ unread_notification_count }}</b>{% endif %}
+            </button>
+            <div class="notification-popover is-hidden" id="notification-popover" role="dialog" aria-label="รายการแจ้งเตือน">
+              <div class="notification-heading">
+                <strong>การแจ้งเตือน</strong>
+                {% if unread_notification_count %}<form method="post" action="{% url 'mark_notifications_read' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">อ่านทั้งหมด</button></form>{% endif %}
+              </div>
+              {% for notification in unread_notifications %}
+                <a href="{% url 'notification_open' notification.id %}" data-no-partial-navigation><strong>{{ notification.title }}</strong><span>{{ notification.message }}</span><small>{{ notification.created_at|date:"j M H:i" }}</small></a>
+              {% empty %}
+                <p>ยังไม่มีการแจ้งเตือนใหม่</p>
+              {% endfor %}
+            </div>
+          </div>
+          <a class="budget-link topbar-icon-button" href="{% url 'budget_settings' %}" aria-label="Budget" title="Budget">฿</a>
+          <button class="theme-toggle topbar-icon-button" id="theme-toggle" type="button" aria-label="เปิดโหมดมืด" title="สลับโหมดมืด" aria-pressed="false"><svg class="theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 15.5A8.6 8.6 0 0 1 8.5 3.4 8.6 8.6 0 1 0 20.6 15.5Z"/></svg></button>
+          <a class="profile-link" href="{% url 'signature_setup' %}">โปรไฟล์</a>
+          <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button" type="submit">ออกจากระบบ</button></form>
+        </nav>
+      </header>
+    {% endif %}
+    <main id="page-content" class="page-shell{% block page_class %}{% endblock %}">
+      {% if user.is_authenticated and request.resolver_match.url_name != 'dashboard' %}
+        <div class="page-navigation"><button class="page-back" id="page-back" type="button" data-fallback="{% url 'dashboard' %}">← ย้อนกลับ</button></div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+    {% if messages %}<div class="toast-stack" aria-live="polite">{% for message in messages %}<div class="toast toast-{{ message.tags|default:'info' }}"><span>{{ message }}</span><button type="button" aria-label="ปิด">×</button></div>{% endfor %}</div>{% endif %}
+    <dialog class="confirm-dialog" id="confirm-dialog"><form method="dialog"><h2>ยืนยันการดำเนินการ</h2><p id="confirm-message">คุณต้องการดำเนินการต่อหรือไม่?</p><div><button class="button button-secondary" value="cancel">ยกเลิก</button><button class="button button-primary" value="confirm">ยืนยัน</button></div></form></dialog>
+    <div class="page-loading-overlay" id="page-loading-overlay" aria-live="assertive" aria-busy="true" aria-hidden="true"><div class="page-loading-card"><div class="page-loading-mark" aria-hidden="true"><span>฿</span></div><strong>กำลังดำเนินการ</strong><small>โปรดรอสักครู่ ระบบกำลังบันทึกข้อมูลของคุณ</small></div></div>
+    <script>
+      (() => {
+        const menu = document.querySelector('.notification-menu');
+        const trigger = document.getElementById('notification-trigger');
+        const popover = document.getElementById('notification-popover');
+        if (!menu || !trigger || !popover) return;
+        const feedUrl = menu.dataset.feedUrl;
+        let firstLoad = true, previousIds = '';
+        const csrfToken = () => document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const addToast = () => {
+          const stack = document.querySelector('.toast-stack') || Object.assign(document.createElement('div'), { className: 'toast-stack' });
+          if (!stack.parentNode) document.body.append(stack);
+          const toast = document.createElement('div'); toast.className = 'toast toast-info';
+          const text = document.createElement('span'); text.textContent = 'มีการแจ้งเตือนใหม่';
+          const close = document.createElement('button'); close.type = 'button'; close.setAttribute('aria-label', 'ปิด'); close.textContent = '×';
+          const dismiss = () => toast.remove(); close.addEventListener('click', dismiss); toast.append(text, close); stack.append(toast); window.setTimeout(dismiss, 3000);
+        };
+        const render = (data) => {
+          const ids = data.notifications.map((item) => item.id).join(',');
+          if (!firstLoad && ids && ids !== previousIds) addToast();
+          firstLoad = false; previousIds = ids;
+          trigger.querySelector('b')?.remove();
+          if (data.count) { const badge = document.createElement('b'); badge.textContent = data.count > 99 ? '99+' : data.count; trigger.append(badge); }
+          popover.querySelectorAll('a, p, .notification-heading form').forEach((node) => node.remove());
+          const heading = popover.querySelector('.notification-heading');
+          if (data.count) { const form = document.createElement('form'); form.method = 'post'; form.action = '{% url "mark_notifications_read" %}'; const csrf = document.createElement('input'); csrf.type = 'hidden'; csrf.name = 'csrfmiddlewaretoken'; csrf.value = csrfToken(); const next = document.createElement('input'); next.type = 'hidden'; next.name = 'next'; next.value = window.location.pathname; const button = document.createElement('button'); button.type = 'submit'; button.textContent = 'อ่านทั้งหมด'; form.append(csrf, next, button); heading.append(form); }
+          if (!data.notifications.length) { const empty = document.createElement('p'); empty.textContent = 'ยังไม่มีการแจ้งเตือนใหม่'; popover.append(empty); return; }
+          data.notifications.forEach((item) => { const link = document.createElement('a'); link.href = item.link || '#'; link.dataset.noPartialNavigation = ''; const title = document.createElement('strong'); title.textContent = item.title; const message = document.createElement('span'); message.textContent = item.message; const created = document.createElement('small'); created.textContent = item.created_at; link.append(title, message, created); popover.append(link); });
+        };
+        const poll = async () => { if (document.visibilityState !== 'visible') return; try { const response = await fetch(feedUrl, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } }); if (response.ok) render(await response.json()); } catch (_) {} };
+        poll(); window.setInterval(poll, 15000); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(); });
+      })();
+    </script>
+    <script>
+      document.querySelectorAll('.toast').forEach((toast) => { const close = () => { toast.classList.add('is-leaving'); setTimeout(() => toast.remove(), 220); }; toast.querySelector('button').addEventListener('click', close); setTimeout(close, 3000); });
+      const themeToggle = document.getElementById('theme-toggle'); if (themeToggle) { const syncTheme = () => { const dark = document.documentElement.classList.contains('dark-mode'); themeToggle.setAttribute('aria-pressed', String(dark)); themeToggle.setAttribute('aria-label', dark ? 'เปิดโหมดสว่าง' : 'เปิดโหมดมืด'); themeToggle.title = dark ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'; }; const csrfToken = () => document.cookie.split('; ').find((cookie) => cookie.startsWith('csrftoken='))?.split('=')[1] || ''; syncTheme(); themeToggle.addEventListener('click', async () => { const wasDark = document.documentElement.classList.contains('dark-mode'); document.documentElement.classList.toggle('dark-mode'); syncTheme(); try { const response = await fetch('{% url "theme_preference" %}', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken() }, body: new URLSearchParams({ mode: wasDark ? 'LIGHT' : 'DARK' }) }); if (!response.ok) throw new Error('Unable to save theme'); } catch (_) { document.documentElement.classList.toggle('dark-mode'); syncTheme(); } }); }
+      const notificationTrigger = document.getElementById('notification-trigger'), notificationPopover = document.getElementById('notification-popover');
+      if (notificationTrigger) {
+        // Opening the bell only reveals the list. Reading one message happens
+        // through its link; the separate "อ่านทั้งหมด" button marks all read.
+        notificationTrigger.addEventListener('click', () => {
+          const isHidden = notificationPopover.classList.toggle('is-hidden');
+          notificationTrigger.setAttribute('aria-expanded', String(!isHidden));
+        });
+        document.addEventListener('click', (event) => {
+          if (!event.target.closest('.notification-menu')) {
+            notificationPopover.classList.add('is-hidden');
+            notificationTrigger.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+      (() => {
+        const storageKey = 'pettyCashRouteHistory';
+        const route = (url) => { const resolved = new URL(url, window.location.origin); return `${resolved.pathname}${resolved.search}${resolved.hash}`; };
+        const samePage = (first, second) => new URL(first, window.location.origin).pathname === new URL(second, window.location.origin).pathname;
+        const read = () => { try { const saved = JSON.parse(sessionStorage.getItem(storageKey) || '[]'); return Array.isArray(saved) ? saved : []; } catch (_) { return []; } };
+        const write = (history) => { try { sessionStorage.setItem(storageKey, JSON.stringify(history.slice(-30))); } catch (_) {} };
+        const visit = (url) => { const current = route(url); const history = read(); const index = history.findLastIndex((item) => samePage(item, current)); if (index >= 0) { history.splice(index + 1); history[index] = current; } else { history.push(current); } write(history); };
+        const push = (url) => { const current = route(url); const history = read(); if (history.length && samePage(history.at(-1), current)) history[history.length - 1] = current; else history.push(current); write(history); };
+        const previous = () => { const current = route(window.location.href); const history = read(); if (!history.length || !samePage(history.at(-1), current)) visit(current); const currentHistory = read(); if (currentHistory.length < 2) return null; currentHistory.pop(); write(currentHistory); return currentHistory.at(-1); };
+        window.__pageRouteHistory = { visit, push, previous };
+        visit(window.location.href);
+      })();
+      document.addEventListener('click', (event) => { const pageBack = event.target.closest('#page-back'); if (!pageBack) return; const previous = window.__pageRouteHistory?.previous(); window.location.assign(previous || pageBack.dataset.fallback); });
+      const loadingOverlay = document.getElementById('page-loading-overlay'); let isPageSubmitting = false; const showPageLoading = (submitter) => { if (isPageSubmitting) return; isPageSubmitting = true; document.body.classList.add('is-page-loading'); loadingOverlay?.classList.add('is-visible'); loadingOverlay?.setAttribute('aria-hidden', 'false'); const button = submitter || document.querySelector('button[type="submit"]'); if (button) { button.classList.add('is-loading'); button.disabled = true; } }; const hidePageLoading = () => { isPageSubmitting = false; document.body.classList.remove('is-page-loading'); loadingOverlay?.classList.remove('is-visible'); loadingOverlay?.setAttribute('aria-hidden', 'true'); }; window.addEventListener('pageshow', hidePageLoading);
+      const submitWithHistoryReplace = async (form, submitter) => { showPageLoading(submitter); try { const response = await fetch(form.action, { method: 'POST', credentials: 'same-origin', headers: { 'X-History-Replace': '1' }, body: new FormData(form) }); const payload = await response.json(); if (!response.ok || !payload.redirect) throw new Error('Unable to replace history'); window.location.replace(payload.redirect); } catch (_) { hidePageLoading(); form.submit(); } };
+      document.addEventListener('submit', (event) => { if (event.defaultPrevented) return; const form = event.target; if (!(form instanceof HTMLFormElement) || form.closest('.confirm-dialog')) return; if (isPageSubmitting) { event.preventDefault(); return; } if (form.dataset.confirmed === 'true') { form.dataset.confirmed = ''; if (form.dataset.historyReplace === 'true') { event.preventDefault(); submitWithHistoryReplace(form, event.submitter); return; } showPageLoading(event.submitter); return; } const submitter = event.submitter; const message = submitter?.dataset.confirm || form.dataset.confirm; if (!message) { showPageLoading(submitter); return; } event.preventDefault(); const dialog = document.getElementById('confirm-dialog'); document.getElementById('confirm-message').textContent = message; dialog.showModal(); dialog.addEventListener('close', () => { if (dialog.returnValue === 'confirm') { form.dataset.confirmed = 'true'; form.requestSubmit(submitter); } }, {once: true}); });
+    </script>
+    <script>
+      (() => {
+        const replaceTable = async (url, source) => {
+          const card = source.closest('.user-list-card');
+          if (!card) return;
+          card.classList.add('table-pagination-updating');
+          try {
+            const response = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!response.ok) throw new Error('โหลดตารางไม่สำเร็จ');
+            const nextCard = new DOMParser().parseFromString(await response.text(), 'text/html').querySelector('.user-list-card');
+            if (!nextCard) throw new Error('ไม่พบข้อมูลตาราง');
+            card.replaceWith(nextCard);
+            window.history.pushState({ partialNavigation: true, scrollY: window.scrollY }, '', url);
+          } catch (error) {
+            window.location.assign(url);
+          }
+        };
+        document.addEventListener('submit', (event) => {
+          const form = event.target;
+          if (!form.matches('.table-page-size')) return;
+          event.preventDefault(); event.stopImmediatePropagation();
+          const data = new FormData(form, event.submitter);
+          replaceTable(`${window.location.pathname}?${new URLSearchParams(data).toString()}`, form);
+        }, true);
+        document.addEventListener('click', (event) => {
+          const link = event.target.closest('.table-pagination nav a');
+          if (!link) return;
+          event.preventDefault(); event.stopImmediatePropagation();
+          replaceTable(link.href, link);
+        }, true);
+      })();
+    </script>
+    <script>
+      document.querySelectorAll('#actual-total').forEach((actualTotal) => {
+        const reason = document.getElementById('excess-reason');
+        const reasonField = reason?.closest('.form-field');
+        const hint = actualTotal.parentElement.querySelector('small')?.textContent || '';
+        const requested = Number((hint.match(/ยอดที่ขอ\s*([\d,.]+)/) || [])[1]?.replace(/,/g, ''));
+        if (!reason || !reasonField || !Number.isFinite(requested)) return;
+        const updateExcessReason = () => {
+          const isExcess = Number(actualTotal.value || 0) > requested;
+          reasonField.classList.toggle('is-excess-visible', isExcess);
+          reason.disabled = !isExcess;
+          reason.required = isExcess;
+          if (!isExcess) reason.value = '';
+        };
+        actualTotal.addEventListener('input', updateExcessReason);
+        updateExcessReason();
+      });
+    </script>
+    <script>
+      document.querySelectorAll('#actual-total').forEach((actualTotal) => {
+        const reason = document.getElementById('excess-reason');
+        const field = reason?.closest('.form-field');
+        const form = actualTotal.closest('form');
+        const hint = actualTotal.parentElement.querySelector('small')?.textContent || '';
+        const requested = Number((hint.match(/([\d,.]+)/) || [])[1]?.replace(/,/g, ''));
+        if (!reason || !field || !form || !Number.isFinite(requested)) return;
+        const label = field.querySelector('label');
+        const originalLabel = label?.innerHTML;
+        const upload = document.createElement('input');
+        upload.type = 'file'; upload.name = 'excess_receipts'; upload.multiple = true; upload.accept = '.pdf,.jpg,.jpeg,.png'; upload.className = 'excess-receipt-input';
+        field.append(upload);
+        const selectedFiles = document.createElement('div'); selectedFiles.className = 'excess-selected-files'; field.append(selectedFiles);
+        const renderFiles = () => { selectedFiles.innerHTML = ''; [...upload.files].forEach((file, index) => { const row = document.createElement('div'); row.className = 'excess-selected-file'; const name = document.createElement('span'); name.textContent = file.name; const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'ลบ'; remove.addEventListener('click', () => { const files = new DataTransfer(); [...upload.files].filter((_, currentIndex) => currentIndex !== index).forEach((item) => files.items.add(item)); upload.files = files.files; renderFiles(); }); row.append(name, remove); selectedFiles.append(row); }); };
+        upload.addEventListener('change', renderFiles);
+        form.enctype = 'multipart/form-data';
+        const updateUploadRequirement = () => {
+          const isExcess = Number(actualTotal.value || 0) > requested;
+          field.classList.toggle('is-excess-visible', isExcess);
+          reason.style.display = isExcess ? 'none' : '';
+          reason.disabled = true;
+          upload.hidden = !isExcess;
+          upload.disabled = !isExcess;
+          upload.required = isExcess;
+          if (!isExcess) { upload.value = ''; renderFiles(); }
+          if (label) label.innerHTML = isExcess ? 'เอกสารประกอบยอดเกิน <span class="required">*</span><small>(PDF, JPG หรือ PNG)</small>' : originalLabel;
+        };
+        actualTotal.addEventListener('input', updateUploadRequirement);
+        actualTotal.addEventListener('change', updateUploadRequirement);
+        updateUploadRequirement();
+      });
+    </script>
+    <script>
+      // A confirmation dialog re-submits the original form. Preserve the
+      // selected workflow action because some browsers omit submitter.name
+      // when requestSubmit() is called after the dialog closes.
+      document.addEventListener('click', (event) => {
+        const button = event.target.closest('button[type="submit"][name="action"]');
+        if (!button?.form) return;
+        let preserved = button.form.querySelector('input[data-preserved-workflow-action]');
+        if (!preserved) {
+          preserved = document.createElement('input');
+          preserved.type = 'hidden';
+          preserved.name = 'action';
+          preserved.dataset.preservedWorkflowAction = 'true';
+          button.form.append(preserved);
+        }
+        preserved.value = button.value;
+      }, true);
+    </script>
+    <script>
+      // Keep normal POST forms as full navigations.  GET links only replace
+      // the page content so navigation stays responsive without changing
+      // workflow, CSRF, or download behavior.
+      (() => {
+        let pageContent = document.getElementById('page-content');
+        let isNavigating = false;
+        if (!pageContent || !window.fetch || !window.history.pushState) return;
+        if (!history.state?.partialNavigation) history.replaceState({ partialNavigation: true, scrollY: window.scrollY }, '', window.location.href);
+
+        const saveScroll = () => history.replaceState({ ...(history.state || {}), partialNavigation: true, scrollY: window.scrollY }, '', window.location.href);
+        const runContentScripts = (container) => container.querySelectorAll('script').forEach((oldScript) => {
+          const script = document.createElement('script');
+          [...oldScript.attributes].forEach((attribute) => script.setAttribute(attribute.name, attribute.value));
+          script.textContent = oldScript.textContent;
+          oldScript.replaceWith(script);
+        });
+        const loadPage = async (url, { push = false, restoreScroll = 0 } = {}) => {
+          if (!pageContent) return window.location.assign(url);
+          if (isNavigating) return;
+          isNavigating = true;
+          pageContent.setAttribute('aria-busy', 'true');
+          try {
+            const response = await fetch(url, { credentials: 'same-origin', headers: { 'X-Partial-Navigation': '1' } });
+            if (!response.ok) throw new Error('Unable to load page');
+            const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const nextContent = nextDocument.getElementById('page-content');
+            if (!nextContent) throw new Error('Page content was not found');
+            document.title = nextDocument.title || document.title;
+            pageContent.replaceWith(nextContent);
+            pageContent = nextContent;
+            runContentScripts(pageContent);
+            if (push) history.pushState({ partialNavigation: true, scrollY: 0 }, '', url);
+            if (push) window.__pageRouteHistory?.push(url); else window.__pageRouteHistory?.visit(url);
+            requestAnimationFrame(() => window.scrollTo(0, restoreScroll));
+          } catch (_) {
+            window.location.assign(url);
+          } finally {
+            pageContent?.removeAttribute('aria-busy');
+            isNavigating = false;
+          }
+        };
+        document.addEventListener('click', (event) => {
+          const link = event.target.closest('a[href]');
+          if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download') || link.dataset.noPartialNavigation !== undefined || link.origin !== window.location.origin || (link.pathname === window.location.pathname && link.search === window.location.search && link.hash)) return;
+          event.preventDefault(); if (isNavigating) return; saveScroll(); loadPage(link.href, { push: true });
+        });
+        window.addEventListener('popstate', (event) => {
+          if (!event.state?.partialNavigation) return;
+          loadPage(window.location.href, { restoreScroll: event.state.scrollY || 0 });
+        });
+      })();
+    </script>
+    <script>
+      (() => {
+        const topbar = document.querySelector('.topbar');
+        if (!topbar) return;
+        const syncTopbar = () => topbar.classList.toggle('is-scrolled', window.scrollY > 4);
+        window.addEventListener('scroll', syncTopbar, { passive: true });
+        syncTopbar();
+      })();
+    </script>
+  </body>
+</html>
