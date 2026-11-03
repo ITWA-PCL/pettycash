@@ -1,0 +1,48 @@
+name: Deploy Pettycash
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pettycash-production
+  cancel-in-progress: false
+jobs:
+  verify:
+    name: Verify exact commit before deployment
+    uses: ./.github/workflows/security-gate.yml
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && vars.PETTYCASH_AUTODEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: pettycash-production
+    steps:
+      - name: Deploy exact main commit over verified SSH
+        shell: bash
+        env:
+          SHA: ${{ github.sha }}
+          ENABLED: ${{ vars.PETTYCASH_AUTODEPLOY_ENABLED }}
+          HOST: ${{ secrets.VPS_HOST }}
+          DEPLOY_USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$ENABLED" == true ]] || { echo "Production readiness has not been enabled"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || exit 1
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || exit 1
+          [[ "$PORT" =~ ^[0-9]{1,5}$ ]] && (( PORT >= 1 && PORT <= 65535 )) || exit 1
+          [[ -n "$SSH_KEY" && -n "$KNOWN_HOSTS" ]] || { echo "Missing SSH configuration"; exit 1; }
+          umask 077
+          SSH_DIR=$(mktemp -d)
+          trap 'rm -rf -- "$SSH_DIR"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$SSH_DIR/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$SSH_DIR/known_hosts"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" -o IdentitiesOnly=yes \
+            -i "$SSH_DIR/key" -p "$PORT" "$DEPLOY_USER@$HOST" \
+            "bash /var/www/Pettycash/bin/deploy.sh $SHA"
