@@ -1,0 +1,92 @@
+from pathlib import Path
+
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+from openpyxl import load_workbook
+
+from apps.core.audit import log_event
+from apps.core.models import Budget, BusinessUnit
+
+
+def load_master_rows(path):
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        if "Business unit" not in workbook or "Budget" not in workbook:
+            raise CommandError("ไฟล์ต้องมีชีต Business unit และ Budget")
+        bu_sheet = workbook["Business unit"]
+        budget_sheet = workbook["Budget"]
+        if tuple(next(bu_sheet.values)[:2]) != ("Distribution Rule", "Distribution Rule Name"):
+            raise CommandError("หัวตาราง Business unit ไม่ตรงรูปแบบไฟล์")
+        if tuple(next(budget_sheet.values)[:3]) != ("Expenses/Asset", "Description", "Department"):
+            raise CommandError("หัวตาราง Budget ไม่ตรงรูปแบบไฟล์")
+
+        units = []
+        seen_codes = set()
+        for number, row in enumerate(bu_sheet.iter_rows(min_row=2, values_only=True), start=2):
+            code, name = (str(value).strip() if value is not None else "" for value in row[:2])
+            if not code and not name:
+                continue
+            if not code or not name or len(code) > 20 or len(name) > 150:
+                raise CommandError(f"Business unit แถว {number}: รหัสหรือชื่อไม่ถูกต้อง")
+            if code.casefold() in seen_codes:
+                raise CommandError(f"Business unit แถว {number}: รหัส BU ซ้ำ {code}")
+            seen_codes.add(code.casefold())
+            units.append((code, name))
+
+        budgets = []
+        seen_budgets = set()
+        for number, row in enumerate(budget_sheet.iter_rows(min_row=2, values_only=True), start=2):
+            category, name, department = (str(value).strip() if value is not None else "" for value in row[:3])
+            if not category and not name and not department:
+                continue
+            if category not in Budget.Category.values or not name or not department or len(name) > 150 or len(department) > 150:
+                raise CommandError(f"Budget แถว {number}: ประเภท ชื่อ หรือแผนกไม่ถูกต้อง")
+            key = (department.casefold(), name.casefold())
+            if key in seen_budgets:
+                raise CommandError(f"Budget แถว {number}: Budget ซ้ำในแผนก {department}: {name}")
+            seen_budgets.add(key)
+            budgets.append((category, name, department))
+        if not units or not budgets:
+            raise CommandError("ไฟล์ต้องมี BU และ Budget อย่างน้อย 1 รายการ")
+        return units, budgets
+    finally:
+        workbook.close()
+
+
+class Command(BaseCommand):
+    help = "Import BU and Budget master data from the supplied workbook. --replace removes old master rows."
+
+    def add_arguments(self, parser):
+        parser.add_argument("workbook", type=Path)
+        parser.add_argument("--owner", help="Username recorded as the owner of imported Budget rows")
+        parser.add_argument("--replace", action="store_true", help="Replace all existing BU and Budget master rows")
+        parser.add_argument("--dry-run", action="store_true", help="Validate and report counts without changing the database")
+
+    def handle(self, *args, **options):
+        path = options["workbook"]
+        if not path.is_file():
+            raise CommandError(f"ไม่พบไฟล์ {path}")
+        units, budgets = load_master_rows(path)
+        self.stdout.write(f"ตรวจไฟล์ผ่าน: BU {len(units)} รายการ, Budget {len(budgets)} รายการ")
+        if options["dry_run"]:
+            return
+        if not options["replace"]:
+            raise CommandError("การนำเข้าต้องระบุ --replace เพื่อยืนยันว่าจะแทนที่ข้อมูล master เดิม")
+        if not options["owner"]:
+            raise CommandError("กรุณาระบุ --owner สำหรับบันทึกผู้รับผิดชอบการนำเข้า")
+        owner = get_user_model().objects.filter(username=options["owner"], is_active=True).first()
+        if owner is None:
+            raise CommandError("ไม่พบผู้ใช้ที่เปิดใช้งานตาม --owner")
+        with transaction.atomic():
+            old_budget_count = Budget.objects.count()
+            old_bu_count = BusinessUnit.objects.count()
+            Budget.objects.all().delete()
+            BusinessUnit.objects.all().delete()
+            BusinessUnit.objects.bulk_create([BusinessUnit(code=code, name=name) for code, name in units])
+            Budget.objects.bulk_create([
+                Budget(owner=owner, category=category, name=name, department=department)
+                for category, name, department in budgets
+            ])
+            log_event(owner, "IMPORT_BUDGET_MASTER", path.name, f"แทนที่ BU {old_bu_count} → {len(units)} และ Budget {old_budget_count} → {len(budgets)} รายการ")
+        self.stdout.write(self.style.SUCCESS(f"นำเข้าสำเร็จ: BU {len(units)} รายการ, Budget {len(budgets)} รายการ"))

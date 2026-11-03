@@ -1,0 +1,16 @@
+<section class="card approval-action-card accountant-review-card">
+  <details>
+    <summary><strong>แก้ไขยอดก่อนจ่าย</strong></summary>
+    <p class="muted">กรณียอดไม่ตรงหลักฐาน เจ้าหน้าที่บัญชีแก้ได้ก่อนบันทึกจ่าย ระบบเก็บยอดก่อน–หลัง หากเข้าเกณฑ์ CFO จะส่งผู้จัดการบัญชีและ CFO อนุมัติใหม่ก่อนจ่าย</p>
+    <form method="post" action="{% url 'claim_amount_correct' claim.pk %}" data-confirm="ยืนยันแก้ไขยอดก่อนจ่ายตามหลักฐาน? หากเข้าเกณฑ์ CFO ต้องรอผู้จัดการบัญชีและ CFO อนุมัติใหม่">
+      {% csrf_token %}<input type="hidden" name="amount_revision" value="{{ claim.amount_revision }}">
+      {% for item in claim.items.all %}
+      <div class="claim-clearance-line"><strong>{{ item.description }} · ยอดเดิม {{ item.requested_amount|floatformat:2 }} บาท</strong>
+        <div class="form-field clearance-amount-field"><label for="corrected-requested-{{ item.pk }}">ยอดที่ถูกต้อง <span class="required">*</span></label><input id="corrected-requested-{{ item.pk }}" name="corrected_requested_{{ item.pk }}" type="number" min="0.01" max="9999999999.99" step="0.01" required value="{{ item.requested_amount|floatformat:'2u' }}"></div>
+      </div>
+      {% endfor %}
+      <div class="form-field"><label for="requested-correction-note">หมายเหตุการแก้ไข (ถ้ามี)</label><textarea id="requested-correction-note" name="correction_note" rows="2" placeholder="เช่น ผู้ขอกรอกยอดไม่ตรงกับใบเสร็จ"></textarea></div>
+      <button class="button button-secondary accountant-review-button" type="submit">บันทึกยอดที่แก้ไข</button>
+    </form>
+  </details>
+</section>

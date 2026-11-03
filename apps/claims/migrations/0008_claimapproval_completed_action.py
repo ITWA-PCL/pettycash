@@ -1,0 +1,25 @@
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [("claims", "0007_claimapproval_received_action")]
+
+    operations = [
+        migrations.AlterField(
+            model_name="claimapproval",
+            name="action",
+            field=models.CharField(
+                choices=[
+                    ("SUBMITTED", "ส่งอนุมัติ"),
+                    ("APPROVED", "อนุมัติ"),
+                    ("RETURNED", "ส่งกลับแก้ไข"),
+                    ("REJECTED", "ไม่อนุมัติ"),
+                    ("PAID", "บันทึกจ่ายเงิน"),
+                    ("RECEIVED", "ยืนยันรับเงิน"),
+                    ("COMPLETED", "ปิดรายการ"),
+                ],
+                max_length=20,
+            ),
+        ),
+    ]

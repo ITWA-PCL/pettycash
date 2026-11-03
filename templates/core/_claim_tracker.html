@@ -1,0 +1,20 @@
+{% if featured_tracking %}<section class="card dashboard-tracker" aria-label="ติดตามคำขอของฉัน">
+  <div class="dashboard-tracker-heading">
+    <div><span class="panel-kicker">LIVE REQUEST TRACKING</span><h2>คำขอของฉันตอนนี้</h2></div>
+    <span class="tracker-live-mark"><i aria-hidden="true"></i> อัปเดตอัตโนมัติ</span>
+  </div>
+    <div class="tracker-featured{% if featured_tracking.is_returned %} is-returned{% endif %}">
+      <div class="tracker-featured-head">
+        <div><span class="tracker-document">{{ featured_tracking.claim.document_number|default:"แบบร่าง" }}</span><span class="tracker-type">{{ featured_tracking.claim.get_request_type_display }}</span></div>
+        <strong>{{ featured_tracking.claim.requested_total|floatformat:2 }} บาท</strong>
+      </div>
+      <div class="tracker-now"><span>ขั้นตอนปัจจุบัน</span><strong>{{ featured_tracking.headline }}</strong>{% if featured_tracking.waiting_for %}<small>ผู้ดำเนินการถัดไป: {{ featured_tracking.waiting_for }}</small>{% endif %}</div>
+      {% if featured_tracking.claim.status != 'REJECTED' and featured_tracking.claim.status != 'CANCELLED' %}
+        <ol class="tracker-steps" style="--tracker-steps:{{ featured_tracking.steps|length }}" aria-label="ลำดับขั้นตอนคำขอ">
+          {% for step in featured_tracking.steps %}<li class="tracker-step is-{{ step.state }}"{% if step.state == 'current' %} aria-current="step"{% endif %}><span class="tracker-step-dot">{% if step.state == 'done' %}✓{% else %}{{ forloop.counter }}{% endif %}</span><span>{{ step.label }}</span></li>{% endfor %}
+        </ol>
+      {% endif %}
+      <div class="tracker-meta"><span>อัปเดตล่าสุด {{ featured_tracking.claim.updated_at|date:"d M Y H:i" }}</span><a href="{% url 'claim_detail' featured_tracking.claim.pk %}">รายละเอียดคำขอ →</a></div>
+    </div>
+    {% if more_tracking %}<div class="tracker-more" aria-label="คำขออื่นที่กำลังดำเนินการ">{% for item in more_tracking %}<div class="tracker-more-item"><strong>{{ item.claim.document_number|default:"แบบร่าง" }}</strong><span>{{ item.headline }}</span>{% if item.waiting_for %}<small>รอ {{ item.waiting_for }}</small>{% endif %}</div>{% endfor %}</div>{% endif %}
+</section>{% endif %}

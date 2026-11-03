@@ -1,0 +1,19 @@
+{% if claim.approval_references %}
+<section class="card exposure-references-card">
+  <div class="items-heading"><div><span class="eyebrow">เอกสารประกอบยอดอนุมัติ</span><h2>ใบก่อนที่นำมารวมยอด</h2></div><span>{{ claim.approval_references|length }} ใบ</span></div>
+  <p class="muted">ยอดด้านล่างบันทึกไว้ตอนยื่นหรือส่งยอดใหม่ เปรียบเทียบกับใบปัจจุบันได้ และเปิดพรีวิวเอกสารเดิมในหน้านี้</p>
+  <p><strong>ยอดสะสมที่ใช้อนุมัติรอบนี้: {{ claim.exposure_total|floatformat:2 }} บาท</strong></p>
+  {% for reference in claim.approval_references %}
+  <details class="exposure-reference">
+    <summary><strong>{{ reference.document }}</strong><span>{{ reference.date }} · {{ reference.basis }}</span><strong>{{ reference.amount|floatformat:2 }} บาท</strong></summary>
+    {% if reference.source %}
+    <div class="exposure-reference-body">
+      <p><strong>วัตถุประสงค์:</strong> {{ reference.source.purpose }} · <strong>สถานะล่าสุด:</strong> {{ reference.source.workflow_status_display }}</p>
+      <p class="muted">ยอดขอล่าสุด {{ reference.source.requested_total|floatformat:2 }} บาท{% if reference.source.actual_total is not None %} · ใช้จริงล่าสุด {{ reference.source.actual_total|floatformat:2 }} บาท{% endif %} · ยอดที่นำมารวมตอนยื่น {{ reference.amount|floatformat:2 }} บาท</p>
+      <div class="user-table-wrap"><table class="user-table"><thead><tr><th>รายการ</th><th>แผนก / Budget</th><th>ยอดขอ</th><th>ใช้จริง</th></tr></thead><tbody>{% for item in reference.source.items.all %}<tr><td>{{ item.description }}</td><td>{{ item.department }} / {{ item.budget }}</td><td>{{ item.requested_amount|floatformat:2 }}</td><td>{% if item.actual_amount is not None %}{{ item.actual_amount|floatformat:2 }}{% else %}ยังไม่ระบุ{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+      <div class="attachment-list">{% for attachment in reference.source.attachments.all %}<article class="attachment-item"><div class="attachment-file-info"><strong>{{ attachment.original_name }}</strong></div><div class="attachment-actions"><button type="button" class="button button-secondary button-compact attachment-preview-trigger" data-file-name="{{ attachment.original_name }}" data-preview-url="{% url 'claim_reference_preview' claim.id reference.source.id attachment.id %}">พรีวิว</button><a class="button button-primary button-compact" href="{% url 'claim_reference_download' claim.id reference.source.id attachment.id %}">ดาวน์โหลด</a></div></article>{% empty %}<p class="muted">ใบนี้ไม่มีเอกสารแนบ</p>{% endfor %}</div>
+    </div>{% else %}<p class="muted">ไม่พบใบต้นฉบับแล้ว คงเลขที่และยอดที่นำมารวมไว้เป็นประวัติ</p>{% endif %}
+  </details>
+  {% endfor %}
+</section>
+{% endif %}
