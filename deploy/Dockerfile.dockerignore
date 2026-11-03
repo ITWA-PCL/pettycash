@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.py[cod]
+.env
+.env.*
+**/production.env
+**/*.pem
+**/*.key
+db.sqlite3
+media
+staticfiles
+backups
+ADAuthen.md
