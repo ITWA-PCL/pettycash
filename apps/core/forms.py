@@ -1,4 +1,7 @@
 from django import forms
+from urllib.parse import urlsplit
+from django.conf import settings
+import re
 from .models import Budget, BusinessUnit, SystemSettings
 
 
@@ -43,6 +46,9 @@ class BudgetForm(forms.ModelForm):
 
 
 class SystemSettingsForm(forms.ModelForm):
+    integration_names = ('public_base_url', 'ad_gateway_url', 'ad_app_id', 'ad_secret_key', 'ad_origin_ip',
+                         'telegram_bot_token', 'telegram_group_chat_id', 'telegram_webhook_secret')
+
     class Meta:
         model = SystemSettings
         fields = ("company_name", "head_office_document_prefix", "branch_document_prefix", "executive_approval_threshold", "cfo", "max_attachment_count", "max_attachment_size_mb", "daily_reminder_time", "log_retention_days", "require_signature_on_first_login", "claim_print_enabled", "auto_receive_enabled", "auto_receive_after_days", "petty_receive_after_days", "telegram_enabled", "ad_gateway_url", "ad_app_id", "ad_secret_key", "ad_origin_ip", "ad_enabled", "ciam_enabled", "maintenance_mode", "maintenance_message")
@@ -51,11 +57,31 @@ class SystemSettingsForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        for name in self.integration_names:
+            if name not in self.fields:
+                self.fields[name] = self._meta.model._meta.get_field(name).formfield()
+        labels = {'public_base_url': 'URL เว็บที่ใช้งานจริง', 'ad_gateway_url': 'AD Gateway URL',
+            'ad_app_id': 'AD App ID', 'ad_secret_key': 'AD Secret Key', 'ad_origin_ip': 'AD Origin IP',
+            'telegram_bot_token': 'Telegram Bot Token', 'telegram_group_chat_id': 'Telegram Group Chat ID',
+            'telegram_webhook_secret': 'Telegram Webhook Secret'}
+        for name, label in labels.items():
+            self.fields[name].label = label
+        self.initial['public_base_url'] = self.instance.public_base_url or settings.PUBLIC_BASE_URL or 'https://pettycash.windowasia.com'
+        for name, env_name in (('ad_gateway_url', 'AD_GATEWAY_URL'), ('ad_app_id', 'AD_APP_ID'), ('ad_origin_ip', 'AD_ORIGIN_IP')):
+            self.initial[name] = getattr(self.instance, name) or getattr(settings, env_name, '')
+        self.initial['telegram_group_chat_id'] = self.instance.telegram_group_chat_id if self.instance.telegram_bot_token else self.instance.telegram_group_chat_id or settings.TELEGRAM_GROUP_CHAT_ID
+        self.fields['public_base_url'].required = True
+        self.fields['public_base_url'].help_text = 'ใช้สร้างลิงก์ในข้อความ Telegram และที่อยู่รับปุ่มตอบกลับ'
+        self.fields['telegram_group_chat_id'].help_text = 'เว้นว่างได้หากไม่ส่งข้อความเข้ากลุ่ม'
+        for name, env_name in (('ad_secret_key', 'AD_SECRET_KEY'), ('telegram_bot_token', 'TELEGRAM_BOT_TOKEN'), ('telegram_webhook_secret', 'TELEGRAM_WEBHOOK_SECRET')):
+            self.fields[name].required = False
+            self.fields[name].widget = forms.PasswordInput(render_value=False, attrs={'autocomplete': 'new-password'})
+            configured = bool(getattr(self.instance, name) or getattr(settings, env_name, ''))
+            self.fields[name].help_text = ('ตั้งค่าไว้แล้ว · ' if configured else '') + 'เว้นว่างเพื่อเก็บค่าเดิม; ใส่ค่าใหม่เมื่อต้องการเปลี่ยน'
         from apps.accounts.models import User
         self.fields["cfo"].queryset = User.objects.filter(is_active=True).order_by("first_name", "username")
         self.fields["cfo"].help_text = "เลือก CFO 1 คน ผู้รับทราบทุกคำขอ และร่วมอนุมัติกรณียอดเกินเกณฑ์หรือผู้ขอเป็น Manager ขึ้นไป"
         self.fields["ad_secret_key"].required = False
-        self.fields["ad_secret_key"].help_text = "เว้นว่างเพื่อใช้ Secret เดิม"
         self.fields["daily_reminder_time"].help_text = "ระบบจะตรวจทุก 5 นาที และส่งหนึ่งครั้งต่อวันหลังเวลานี้"
         self.fields["log_retention_days"].help_text = "ลบเฉพาะประวัติการใช้งานและการแจ้งเตือนที่เก่ากว่ากำหนด ไม่กระทบคำขอและเอกสาร"
         self.fields["auto_receive_after_days"].help_text = "เริ่มนับจากเวลาที่บัญชีจ่ายเงินยืม; ครบกำหนดแล้วส่งต่อไปรอเคลียร์"
@@ -77,7 +103,41 @@ class SystemSettingsForm(forms.ModelForm):
             self.add_error("branch_document_prefix", "รหัสเอกสารกาญจนบุรีต้องต่างจากสำนักงานใหญ่")
         return cleaned
 
+    @property
+    def integration_fields(self):
+        return [self[name] for name in self.integration_names]
+
+    def clean_public_base_url(self):
+        value = self.cleaned_data['public_base_url'].rstrip('/')
+        parts = urlsplit(value)
+        if parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment or parts.path:
+            raise forms.ValidationError('ระบุ URL หลักแบบ HTTPS เช่น https://pettycash.windowasia.com โดยไม่ใส่ path')
+        return value
+
+    def clean_telegram_bot_token(self):
+        value = self.cleaned_data.get('telegram_bot_token', '').strip()
+        if value and not re.fullmatch(r'[0-9]+:[A-Za-z0-9_-]+', value):
+            raise forms.ValidationError('Bot Token ต้องเป็นค่าที่ได้จาก BotFather')
+        return value
+
+    def clean_telegram_group_chat_id(self):
+        value = self.cleaned_data.get('telegram_group_chat_id', '').strip()
+        if value and not re.fullmatch(r'-?[0-9]+', value):
+            raise forms.ValidationError('Group Chat ID ต้องเป็นตัวเลข เช่น -1001234567890')
+        return value
+
+    def clean_telegram_webhook_secret(self):
+        value = self.cleaned_data.get('telegram_webhook_secret', '').strip()
+        if value and not re.fullmatch(r'[A-Za-z0-9_-]{1,256}', value):
+            raise forms.ValidationError('Webhook Secret ใช้ A–Z, a–z, 0–9, _ หรือ - ไม่เกิน 256 ตัว')
+        return value
+
     def save(self, commit=True):
-        if not self.cleaned_data.get("ad_secret_key") and self.instance.pk:
-            self.instance.ad_secret_key = type(self.instance).objects.get(pk=self.instance.pk).ad_secret_key
+        # These fields are added above to keep existing settings forms compatible.
+        previous = type(self.instance).objects.get(pk=self.instance.pk) if self.instance.pk else None
+        for name in self.integration_names:
+            value = self.cleaned_data.get(name, '')
+            if name in ('ad_secret_key', 'telegram_bot_token', 'telegram_webhook_secret') and not value and previous:
+                value = getattr(previous, name)
+            setattr(self.instance, name, value)
         return super().save(commit)

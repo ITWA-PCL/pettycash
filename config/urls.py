@@ -8,6 +8,11 @@ from apps.accounts.views import login_view, signature_setup, telegram_test_messa
 from apps.claims.views import claim_amount_correct, approval_queue, claim_approval_action, claim_attachment_delete, claim_attachment_download, claim_attachment_preview, claim_cancel_after_refund, claim_cfo_acknowledge, claim_clearance_correct, claim_clearance_submit, claim_complete, claim_create, claim_delete, claim_detail, claim_edit, claim_export, claim_list, claim_payment, claim_payment_slip_download, claim_payment_slip_preview, claim_print, claim_receipt_confirm, claim_submit, telegram_webhook
 from apps.core.views import admin_operations, budget_delete, budget_settings, business_unit_delete, dashboard, dashboard_claim_tracker, mark_notifications_read, notification_feed, notification_open, system_overview, system_settings
 from apps.claims.views import claim_reference_attachment
+from apps.core.views import configure_telegram_webhook
+from apps.core.master_import import budget_import, budget_import_template
+from apps.core.server_configuration import server_configuration
+from apps.accounts.views import signature_image
+from apps.claims.views import claim_signature_image
 
 
 urlpatterns = [
@@ -21,12 +26,17 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("profile/theme/", theme_preference, name="theme_preference"),
     path("profile/signature/", signature_setup, name="signature_setup"),
+    path('profile/signature/image/', signature_image, name='signature_image'),
     path("claims/<int:claim_id>/correct-amount/", claim_amount_correct, name="claim_amount_correct"),
     path("budget/", budget_settings, name="budget_settings"),
+    path('budget/import/', budget_import, name='budget_import'),
+    path('budget/import/template/', budget_import_template, name='budget_import_template'),
     path("budget/<int:budget_id>/delete/", budget_delete, name="budget_delete"),
     path("business-units/<int:bu_id>/delete/", business_unit_delete, name="business_unit_delete"),
     path("settings/users/", user_list, name="user_list"),
     path("settings/system/", system_settings, name="system_settings"),
+    path('settings/system/server/', server_configuration, name='server_configuration'),
+    path('settings/system/telegram-webhook/', configure_telegram_webhook, name='configure_telegram_webhook'),
     path("settings/overview/", system_overview, name="system_overview"),
     path("settings/operations/", admin_operations, name="admin_operations"),
     path("settings/users/new/", user_create, name="user_create"),
@@ -59,6 +69,7 @@ urlpatterns = [
     path("claims/<int:claim_id>/complete/", claim_complete, name="claim_complete"),
     path("claims/<int:claim_id>/cancel-after-refund/", claim_cancel_after_refund, name="claim_cancel_after_refund"),
     path("claims/<int:claim_id>/print/", claim_print, name="claim_print"),
+    path('claims/<int:claim_id>/signatures/<int:user_id>/', claim_signature_image, name='claim_signature_image'),
 ]
 
 if settings.DEBUG:

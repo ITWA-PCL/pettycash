@@ -34,7 +34,7 @@
     {% if is_update %}
       <div class="saved-signature">
         <span>ลายเซ็นที่บันทึกไว้</span>
-        <img src="{{ user.signature.url }}" alt="ลายเซ็นปัจจุบันของ {{ user.get_full_name|default:user.username }}">
+        <img src="{% url 'signature_image' %}" alt="ลายเซ็นปัจจุบันของ {{ user.get_full_name|default:user.username }}">
       </div>
       <p class="signature-replace-note">หากต้องการแก้ไข ให้เลือกลายเซ็นใหม่ด้านล่าง ระบบจะใช้ลายเซ็นใหม่นี้กับเอกสารในอนาคต</p>
     {% endif %}

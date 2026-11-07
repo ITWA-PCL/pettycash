@@ -13,6 +13,7 @@ class SignatureOnboardingMiddleware:
             reverse("login"),
             reverse("logout"),
             reverse("signature_setup"),
+            reverse('signature_image'),
             reverse("theme_preference"),
         }
         if (

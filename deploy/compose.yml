@@ -24,6 +24,36 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+  daily-reminders:
+    profiles: [schedulers]
+    image: pettycash-app:${DEPLOY_SHA:?required}
+    env_file: /var/www/Pettycash/shared/production.env
+    environment:
+      DJANGO_SETTINGS_MODULE: deploy.production
+    command: >
+      sh -c 'while true; do python manage.py auto_confirm_receipts; python manage.py send_daily_pending_reminders --if-due; sleep 300; done'
+    volumes:
+      - media:/app/media
+    networks: [backend]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  log-cleanup:
+    profiles: [schedulers]
+    image: pettycash-app:${DEPLOY_SHA:?required}
+    env_file: /var/www/Pettycash/shared/production.env
+    environment:
+      DJANGO_SETTINGS_MODULE: deploy.production
+    command: >
+      sh -c 'while true; do python manage.py cleanup_expired_logs; sleep 86400; done'
+    networks: [backend]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
   gateway:
     image: nginx:1.28-alpine
     environment:

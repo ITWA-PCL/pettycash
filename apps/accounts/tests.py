@@ -87,7 +87,8 @@ class UserModelTests(TestCase):
 
         response = self.client.get(reverse("signature_setup"))
 
-        self.assertContains(response, user.signature.url)
+        self.assertContains(response, reverse('signature_image'))
+        self.assertNotContains(response, user.signature.url)
 
     def test_profile_form_requires_confirmation_before_submission(self):
         user = User.objects.create_user(username="profile-confirmation", password="safe-test-password")
@@ -204,7 +205,7 @@ class UserModelTests(TestCase):
         response.headers["Content-Type"] = "application/json"
         mock_post.return_value = response
 
-        with self.assertRaisesMessage(ADGatewayError, "AD_SECRET_KEY"):
+        with self.assertRaisesMessage(ADGatewayError, "AD Secret Key ในหน้าตั้งค่าระบบ"):
             verify_ad_credentials("ad-user", "password")
 
     def test_user_can_have_multiple_business_roles(self):

@@ -5,21 +5,27 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 from .system_settings import get_system_settings
+from .integrations import public_base_url, telegram_token, telegram_group
 
 
 logger = logging.getLogger(__name__)
 
 
 def telegram_is_configured() -> bool:
-    return get_system_settings().telegram_enabled and bool(settings.TELEGRAM_BOT_TOKEN)
+    return get_system_settings().telegram_enabled and bool(telegram_token())
 
 
 def build_telegram_text(title: str, message: str, link: str = "", icon: str = "🔔") -> str:
     sent_at = timezone.localtime()
     date_time = f"วันที่ {sent_at:%d/%m}/{sent_at.year + 543} เวลา {sent_at:%H:%M} น."
     text = f"<b>Petty Cash System</b>\n{date_time}\n\n{icon} <b>{escape(title)}</b>\n{escape(message)}".strip()
-    if link and settings.PUBLIC_BASE_URL.startswith("https://"):
-        detail_url = link if link.startswith(("https://", "http://")) else f"{settings.PUBLIC_BASE_URL.rstrip('/')}/{link.lstrip('/')}"
+    base_url = public_base_url()
+    if link and base_url.startswith("https://"):
+        # Absolute links from a previous host are rewritten onto the current site too.
+        from urllib.parse import urlsplit
+        parts = urlsplit(link)
+        path = parts.path + (('?' + parts.query) if parts.query else '')
+        detail_url = f"{base_url}/{path.lstrip('/')}"
         text += f'\n\n📄 <a href="{escape(detail_url, quote=True)}">เปิดรายละเอียดคำขอ</a>'
     return text
 
@@ -29,13 +35,14 @@ def telegram_api_request(method: str, payload: dict) -> bool:
         return False
     try:
         response = requests.post(
-            f"{settings.TELEGRAM_API_BASE_URL.rstrip('/')}/bot{settings.TELEGRAM_BOT_TOKEN}/{method}",
+            f"{settings.TELEGRAM_API_BASE_URL.rstrip('/')}/bot{telegram_token()}/{method}",
             json=payload,
             timeout=8,
         )
         response.raise_for_status()
     except requests.RequestException:
-        logger.exception("Unable to call Telegram method %s", method)
+        # Request exceptions include the URL containing the bot token. Never log it.
+        logger.warning("Unable to call Telegram method %s", method)
         return False
     return True
 
@@ -60,7 +67,7 @@ def send_telegram_notification(user, title: str, message: str, link: str = "", r
 
 def send_telegram_group_notification(title: str, message: str, link: str = "", icon: str = "🔔") -> bool:
     """Send every workflow event to the optional overview group."""
-    return send_telegram_message(settings.TELEGRAM_GROUP_CHAT_ID, build_telegram_text(title, message, link, icon))
+    return send_telegram_message(telegram_group(), build_telegram_text(title, message, link, icon))
 
 
 def answer_telegram_callback(callback_id: str, text: str) -> bool:

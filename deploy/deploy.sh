@@ -44,7 +44,7 @@ SERVICES=$(docker ps -a --filter label=com.docker.compose.project=pettycash \
   --format '{{.Label "com.docker.compose.service"}}')
 while read -r service; do
   case "$service" in
-    web|gateway|db|redis|"") ;;
+    web|gateway|db|redis|daily-reminders|log-cleanup|"") ;;
     *) echo "Unexpected Pettycash service: review before deploying"; exit 2 ;;
   esac
 done <<< "$SERVICES"
@@ -70,7 +70,7 @@ dc run --rm --no-deps web sh -c 'test -w /app/media && test -w /app/staticfiles'
 
 # Failures after stopping leave service unavailable for an explicit recovery decision.
 trap 'echo "Deployment failed. Preserve backups and inspect migration state; no automatic DB rollback." >&2' ERR
-dc stop gateway web
+dc --profile schedulers stop gateway web daily-reminders log-cleanup
 dc up -d --wait --wait-timeout 120 db redis
 BACKUP="$ROOT/backups/$SHA-$STAMP"
 mkdir "$BACKUP"
@@ -107,6 +107,13 @@ tr -d '\r' < "$BACKUP/readiness-headers.txt" |
 code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
   --max-time 10 https://pettycash.windowasia.com/media/deployment-probe)
 [[ "$code" == 404 ]] || { echo "Raw media exposure check failed"; exit 1; }
+# Background jobs are opt-in; start only after migrations and public readiness.
+SCHEDULERS=$(dc exec -T web python -c 'import os; print(os.getenv("PC_SCHEDULERS_ENABLED", "false").lower())')
+if [[ "$SCHEDULERS" == true ]]; then
+  dc --profile schedulers up -d --no-deps daily-reminders log-cleanup
+elif [[ "$SCHEDULERS" != false ]]; then
+  echo "PC_SCHEDULERS_ENABLED must be true or false"; exit 1
+fi
 printf '%s\n' "$SHA" > "$ROOT/deployed-sha.next"
 mv "$ROOT/deployed-sha.next" "$ROOT/deployed-sha"
 echo "Deployed exact main commit $SHA; backups: $BACKUP"

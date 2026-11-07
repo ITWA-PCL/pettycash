@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
+from .secret_fields import SecretTextField
 
 
 AUDIT_ACTION_LABELS = {
@@ -13,6 +14,7 @@ AUDIT_ACTION_LABELS = {
     "CREATE_BU": "เพิ่ม BU", "UPDATE_BU": "แก้ไข BU", "DELETE_BU": "ลบ BU", "IMPORT_BUDGET_MASTER": "นำเข้า BU และ Budget", "CLEAR_TEST_CLAIMS": "ล้างคำขอทดสอบ",
     "DAILY_PENDING_REMINDER": "ส่งแจ้งเตือนงานค้างประจำวัน", "AUTO_CONFIRM_RECEIPT": "ระบบถือว่ารับเงินอัตโนมัติ",
     "UPDATE_SYSTEM_SETTINGS": "แก้ไขการตั้งค่าระบบ", "TEST_DATABASE": "ทดสอบฐานข้อมูล", "TEST_AD": "ทดสอบ AD Gateway", "TEST_TELEGRAM": "ทดสอบ Telegram Bot", "TEST_TELEGRAM_WEBHOOK": "ทดสอบ Telegram Webhook",
+    "SET_TELEGRAM_WEBHOOK": "เชื่อมต่อ Telegram Webhook", "UPDATE_SERVER_CONFIGURATION": "แก้ชุดค่าตั้งต้นเซิร์ฟเวอร์", "EXPORT_SERVER_CONFIGURATION": "ดาวน์โหลดชุดค่าตั้งต้นเซิร์ฟเวอร์",
 }
 
 
@@ -27,6 +29,9 @@ class SystemSettings(models.Model):
     max_attachment_count = models.PositiveSmallIntegerField(default=5)
     max_attachment_size_mb = models.PositiveSmallIntegerField(default=10)
     telegram_group_chat_id = models.CharField(max_length=64, blank=True)
+    telegram_bot_token = SecretTextField(blank=True)
+    telegram_webhook_secret = SecretTextField(blank=True)
+    server_configuration = SecretTextField(blank=True)
     telegram_enabled = models.BooleanField(default=True)
     require_signature_on_first_login = models.BooleanField(default=True)
     claim_print_enabled = models.BooleanField(default=True)
@@ -38,7 +43,7 @@ class SystemSettings(models.Model):
     public_base_url = models.URLField(blank=True)
     ad_gateway_url = models.URLField(blank=True)
     ad_app_id = models.CharField(max_length=150, blank=True)
-    ad_secret_key = models.CharField(max_length=255, blank=True)
+    ad_secret_key = SecretTextField(blank=True)
     ad_origin_ip = models.GenericIPAddressField(blank=True, null=True)
     ad_enabled = models.BooleanField(default=True)
     ciam_enabled = models.BooleanField(default=False)

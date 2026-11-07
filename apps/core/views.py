@@ -28,6 +28,7 @@ from .telegram import build_telegram_text, send_telegram_message, telegram_api_r
 from .pagination import paginate
 from .system_health import get_web_health
 from .tracking import requester_tracking
+from .integrations import public_base_url
 
 
 MONITOR_STATUS_META = (
@@ -57,10 +58,14 @@ def can_manage_budget_master(user):
 
 
 @login_required
+@transaction.atomic
 def budget_settings(request):
     can_manage = can_manage_budget_master(request.user)
     if request.method == "POST" and not can_manage:
         return HttpResponseForbidden("คุณไม่มีสิทธิ์จัดการ Budget")
+    if request.method == 'POST':
+        configuration = get_system_settings()
+        type(configuration).objects.select_for_update().get(pk=configuration.pk)
     business_units = BusinessUnit.objects.all() if can_manage else BusinessUnit.objects.none()
     budgets = Budget.objects.all() if can_manage else Budget.objects.filter(department=request.user.department)
     budgets = budgets.order_by("department", "name", "pk")
@@ -94,11 +99,14 @@ def budget_settings(request):
 
 
 @login_required
+@transaction.atomic
 def budget_delete(request, budget_id):
     if request.method != "POST":
         return JsonResponse({"detail": "Method not allowed"}, status=405)
     if not can_manage_budget_master(request.user):
         return HttpResponseForbidden("คุณไม่มีสิทธิ์จัดการ Budget")
+    configuration = get_system_settings()
+    type(configuration).objects.select_for_update().get(pk=configuration.pk)
     budget = get_object_or_404(Budget, pk=budget_id)
     log_event(request.user, "DELETE_BUDGET", budget.name, f"แผนก {budget.department} · {budget.get_category_display()}")
     budget.delete()
@@ -113,6 +121,8 @@ def business_unit_delete(request, bu_id):
         return JsonResponse({"detail": "Method not allowed"}, status=405)
     if not can_manage_budget_master(request.user):
         return HttpResponseForbidden("คุณไม่มีสิทธิ์จัดการ BU")
+    configuration = get_system_settings()
+    type(configuration).objects.select_for_update().get(pk=configuration.pk)
     unit = get_object_or_404(BusinessUnit.objects.select_for_update(), pk=bu_id)
     # Claims and users retain their BU code snapshots; only remove the master option.
     log_event(request.user, "DELETE_BU", unit.code, unit.name)
@@ -337,7 +347,34 @@ def system_settings(request):
         AdminAuditLog.objects.create(actor=request.user, action="UPDATE_SYSTEM_SETTINGS", target="System settings")
         messages.success(request, "บันทึกการตั้งค่าระบบเรียบร้อยแล้ว")
         return redirect("system_settings")
-    return render(request, "core/system_settings.html", {"form": form})
+    from apps.accounts.ad_auth import ad_gateway_is_configured
+    from .telegram import telegram_is_configured
+    from .integrations import telegram_secret
+    base_url = public_base_url()
+    response = render(request, "core/system_settings.html", {"form": form,
+        "ad_ready": ad_gateway_is_configured(),
+        "telegram_ready": telegram_is_configured() and bool(telegram_secret()) and base_url.startswith('https://'),
+        "webhook_url": f"{base_url}/telegram/webhook/" if base_url else ''})
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+@login_required
+def configure_telegram_webhook(request):
+    if request.method != 'POST':
+        return JsonResponse({'detail': 'Method not allowed'}, status=405)
+    if not can_manage_users(request.user):
+        return HttpResponseForbidden('สำหรับผู้ดูแลระบบเท่านั้น')
+    from django.core.management import call_command, CommandError
+    from io import StringIO
+    try:
+        call_command('set_telegram_webhook', stdout=StringIO())
+    except CommandError:
+        messages.error(request, 'เชื่อมต่อ Webhook ไม่สำเร็จ กรุณาตรวจ Bot Token, Secret, URL และสวิตช์ Telegram')
+    else:
+        log_event(request.user, 'SET_TELEGRAM_WEBHOOK', 'Telegram Webhook', f'{public_base_url()}/telegram/webhook/')
+        messages.success(request, 'เชื่อมต่อ Webhook กับเว็บนี้แล้ว')
+    return redirect('system_settings')
 
 
 @login_required

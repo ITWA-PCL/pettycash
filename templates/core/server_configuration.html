@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}ค่าตั้งต้นเซิร์ฟเวอร์ | Petty Cash{% endblock %}
+{% block page_class %} settings-edit-shell{% endblock %}
+{% block content %}
+<section class="dashboard-header"><div><span class="eyebrow">ตั้งค่าระบบ</span><h1>ตั้งค่าขั้นสูง</h1><p class="muted">ค่าตั้งต้นเซิร์ฟเวอร์สำหรับผู้ดูแล VPS</p></div><a class="button button-secondary button-compact" href="{% url 'system_settings' %}">กลับตั้งค่าระบบ</a></section>
+<section class="card user-form-card settings-server-note"><h2>การใช้งานทั่วไปไม่ต้องกรอกส่วนนี้ซ้ำ</h2><p class="muted">PostgreSQL, Redis, Secret Key และเครือข่าย ใช้ค่าที่ตั้งไว้บนเซิร์ฟเวอร์ได้ ส่วนที่คุณต้องกรอกเพื่อเปิด AD และ Telegram อยู่ในหน้าตั้งค่าการเชื่อมต่อ</p><a class="button button-primary button-compact" href="{% url 'system_settings' %}#settings-connections">ไปตั้งค่า AD และ Telegram</a></section>
+<details class="card user-form-card settings-advanced" id="server-advanced-editor" {% if form.errors %}open{% endif %}><summary><strong>แก้ค่าตั้งต้นเซิร์ฟเวอร์</strong><span>เปิดเฉพาะเมื่อต้องเปลี่ยนค่า หรือเมื่อผู้ดูแล VPS ขอให้ปรับ</span></summary><div>
+<p class="muted">บันทึกเป็นชุดค่ารอใช้งาน มีผลหลังผู้ดูแลนำไฟล์ไปใช้และสร้าง container ใหม่ การแก้ชื่อฐานข้อมูลหรือรหัสผ่านไม่ย้ายข้อมูลหรือเปลี่ยนรหัส PostgreSQL ให้เอง</p><form method="post">{% csrf_token %}{{ form.non_field_errors }}{% for title,fields in form.field_groups %}<section class="settings-server-group"><h3>{{ title }}</h3><div class="form-grid">{% for field in fields %}{% include 'core/_setting_field.html' with field=field %}{% endfor %}</div></section>{% endfor %}<button type="submit" class="button button-primary button-compact">บันทึกชุดค่ารอใช้งาน</button></form>
+{% if saved %}<div class="settings-server-download"><h3>นำไปใช้บน VPS</h3><p class="muted">ไฟล์นี้มีค่าลับ ส่งให้ผู้ดูแล VPS โดยตรงและเก็บไว้นอก Git</p><form method="post" data-confirm="ดาวน์โหลดไฟล์ค่าตั้งต้นที่มีข้อมูลลับสำหรับผู้ดูแล VPS?">{% csrf_token %}<input type="hidden" name="action" value="download"><button type="submit" class="button button-secondary button-compact">ดาวน์โหลด production.env</button></form></div>{% endif %}
+</div></details>
+{% endblock %}
