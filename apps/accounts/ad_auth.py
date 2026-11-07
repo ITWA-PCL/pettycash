@@ -50,7 +50,8 @@ def verify_ad_credentials(username: str, password: str) -> bool:
         "timestamp": timestamp,
     }
     try:
-        headers = {"X-Forwarded-For": str(configuration.ad_origin_ip)} if configuration.ad_origin_ip else {}
+        origin_ip = configuration.ad_origin_ip or settings.AD_ORIGIN_IP
+        headers = {"X-Forwarded-For": str(origin_ip)} if origin_ip else {}
         response = requests.post(gateway_url, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
@@ -69,7 +70,7 @@ def verify_ad_credentials(username: str, password: str) -> bool:
             gateway_code or "none",
         )
         if "secret mismatch" in gateway_code:
-            message = "AD Gateway ปฏิเสธ secret_key เพราะค่าในระบบไม่ตรงกับ Gateway กรุณาอัปเดต AD_SECRET_KEY ในไฟล์ .env แล้วรีสตาร์ต Web"
+            message = "AD Gateway ปฏิเสธ secret_key เพราะค่าในระบบไม่ตรงกับ Gateway กรุณาอัปเดต AD Secret Key ในหน้าตั้งค่าระบบ"
         elif gateway_code == "expired":
             message = "AD Gateway ปฏิเสธ Timestamp เพราะเวลาไม่ตรงหรือเกิน 5 นาที"
         elif "ip" in gateway_code and ("allow" in gateway_code or "forbid" in gateway_code):

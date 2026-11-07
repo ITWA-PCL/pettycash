@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}นำเข้า {{ meta.label }} | Petty Cash{% endblock %}
+{% block page_class %} import-workspace{% endblock %}
+{% block content %}
+<section class="dashboard-header import-heading"><div><span class="eyebrow">MASTER DATA</span><h1>นำเข้าข้อมูล</h1><p class="muted">เลือกประเภทข้อมูล อัปโหลด Excel แล้วตรวจรายการก่อนนำเข้า</p></div><a class="button button-secondary button-compact" href="{% url 'budget_settings' %}">← กลับ Budget และ BU</a></section>
+<nav class="import-tabs" aria-label="ประเภทข้อมูลที่นำเข้า">
+  <a class="import-tab {% if kind == 'bu' %}is-active{% endif %}" href="{% url 'budget_import' %}?kind=bu" {% if kind == 'bu' %}aria-current="page"{% endif %}><span class="import-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span><strong>นำเข้า BU</strong><small>รหัสและชื่อหน่วยธุรกิจ</small></span><span class="import-tab-tick" aria-hidden="true">✓</span></a>
+  <a class="import-tab {% if kind == 'budget' %}is-active{% endif %}" href="{% url 'budget_import' %}?kind=budget" {% if kind == 'budget' %}aria-current="page"{% endif %}><span class="import-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18m-6 4h6m-5 3h1M7 5V3h11"/></svg></span><span><strong>นำเข้า Budget</strong><small>ประเภทค่าใช้จ่ายและแผนกเจ้าของ</small></span><span class="import-tab-tick" aria-hidden="true">✓</span></a>
+</nav>
+<section class="card import-upload-card">
+  <div class="import-section-heading"><div class="import-section-title"><span class="import-step">1</span><div><h2>อัปโหลดไฟล์ {{ meta.label }}</h2><p class="muted">{{ meta.description }}</p></div></div><a class="button button-secondary button-compact import-template-link" href="{% url 'budget_import_template' %}?kind={{ kind }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></svg>แม่แบบ {{ meta.label }}</a></div>
+  <form method="post" enctype="multipart/form-data" id="master-upload-form">
+    {% csrf_token %}<input type="hidden" name="kind" value="{{ kind }}">{{ form.non_field_errors }}
+    <div class="import-upload-layout">
+      <div>
+        <label class="import-dropzone" id="master-dropzone" for="id_workbook"><input id="id_workbook" name="workbook" type="file" accept=".xlsx" required class="import-file-input"><span class="import-upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 18H5a4 4 0 0 1-.5-8 7.5 7.5 0 0 1 14-2 5 5 0 0 1 .5 10h-2M12 21V11m-4 4 4-4 4 4"/></svg></span><strong>ลากไฟล์ Excel มาวางที่นี่</strong><span>หรือ <span class="import-file-link">เลือกไฟล์จากเครื่อง</span></span><small>.xlsx เท่านั้น · ไม่เกิน 5 MB</small></label>
+        <div id="master-selected-file" class="import-selected-file" {% if not preview %}hidden{% endif %}><span class="import-file-badge" aria-hidden="true">XLS</span><span><strong id="master-file-name">{{ preview.filename }}</strong><small id="master-file-size">{% if preview %}ตรวจไฟล์แล้ว{% endif %}</small></span><button type="button" id="master-change-file" class="text-action">เปลี่ยนไฟล์</button></div>
+        {% for error in form.workbook.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}<p class="field-error" id="master-file-error" role="alert" hidden></p>
+      </div>
+      <aside class="import-file-guide"><span class="import-guide-label">รูปแบบไฟล์ {{ meta.label }}</span><h3>ชีต {{ meta.sheet }}</h3><p>ใช้หัวคอลัมน์ตามแม่แบบ</p><ol>{% for header in meta.headers %}<li><span>{{ forloop.counter }}</span>{{ header }}</li>{% endfor %}</ol><small>ใช้ไฟล์เดิมที่มีทั้งสองชีตได้ ระบบอ่านเฉพาะ {{ meta.sheet }}<br>สูงสุด 10,000 แถว</small></aside>
+    </div>
+    <fieldset class="import-mode-fieldset"><legend>เลือกวิธีนำเข้า {{ meta.label }}</legend><div class="import-mode-options">
+      <label class="import-mode-option"><input type="radio" name="mode" value="merge" {% if form.mode.value != 'replace' %}checked{% endif %}><span><strong>เพิ่ม / อัปเดต <em>แนะนำ</em></strong><small>เพิ่มรายการใหม่ อัปเดตรายการที่ตรงกัน และเก็บรายการอื่นไว้</small></span></label>
+      <label class="import-mode-option"><input type="radio" name="mode" value="replace" {% if form.mode.value == 'replace' %}checked{% endif %}><span><strong>ใช้ไฟล์เป็นรายการหลัก</strong><small>แทนที่เฉพาะ {{ meta.label }} เดิมทั้งหมดด้วยรายการในไฟล์</small></span></label>
+    </div>{% for error in form.mode.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</fieldset>
+    <div class="import-upload-footer"><span class="muted">การนำเข้านี้เปลี่ยนเฉพาะ {{ meta.label }}</span><button class="button button-primary button-compact" type="submit" id="master-preview-button">ตรวจไฟล์และดูตัวอย่าง <span aria-hidden="true">→</span></button></div>
+  </form>
+</section>
+<p id="master-preview-stale" class="alert" hidden>ไฟล์หรือวิธีนำเข้าเปลี่ยนแล้ว กรุณาตรวจไฟล์อีกครั้งก่อนยืนยัน</p>
+{% if preview %}
+<section class="card import-preview-card" id="master-preview-panel" data-mode="{{ preview.mode }}">
+  <div class="import-section-heading"><div class="import-section-title"><span class="import-step is-ready">✓</span><div><h2>ตรวจสอบก่อนนำเข้า {{ meta.label }}</h2><p class="muted">{{ preview.filename }}</p></div></div><span class="import-ready-badge">ตรวจไฟล์ผ่านแล้ว</span></div>
+  <div class="import-stat-grid"><div><span>รายการในไฟล์</span><strong>{{ preview.rows|length }}</strong></div><div class="import-stat-new"><span>เพิ่มใหม่</span><strong>{{ preview.stats.new }}</strong></div><div><span>อัปเดต</span><strong>{{ preview.stats.updated }}</strong></div><div class="{% if preview.stats.removed %}import-stat-remove{% endif %}"><span>นำรายการเดิมออก</span><strong>{{ preview.stats.removed }}</strong></div></div>
+  {% if preview.mode == 'replace' %}<p class="import-replace-note">ใช้ไฟล์เป็นรายการหลัก: แทนที่เฉพาะ {{ meta.label }} เดิม {{ preview.stats.removed }} รายการ ข้อมูลอีกส่วนและคำขอเดิมคงอยู่</p>{% endif %}
+  <div class="import-table-toolbar"><h3>รายการ {{ meta.label }} ในไฟล์</h3><label class="import-search"><span class="sr-only">ค้นหารายการในไฟล์</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input type="search" id="master-preview-search" placeholder="ค้นหารายการในไฟล์…"></label></div>
+  <div class="import-preview-scroll"><table class="user-table"><thead><tr><th class="import-row-number">ลำดับ</th>{% for column in meta.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead><tbody id="master-preview-rows">{% for row in preview.rows|slice:':10' %}<tr><td class="import-row-number">{{ forloop.counter }}</td>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody></table><p id="master-preview-empty" class="budget-empty" hidden>ไม่พบรายการที่ตรงกับคำค้นหา</p></div>
+  <div class="import-pagination"><span id="master-preview-summary" aria-live="polite"></span><div><label>แสดง <select id="master-preview-size" aria-label="จำนวนรายการต่อหน้า"><option>10</option><option>20</option><option>50</option></select></label><button type="button" class="button button-secondary button-compact" id="master-preview-prev">←</button><span id="master-preview-page"></span><button type="button" class="button button-secondary button-compact" id="master-preview-next">→</button></div></div>
+  <div class="import-confirm-footer"><span>พร้อมนำเข้า <strong>{{ preview.rows|length }} {{ meta.label }}</strong> · {% if preview.mode == 'replace' %}ใช้ไฟล์เป็นรายการหลัก{% else %}เพิ่ม / อัปเดต{% endif %}</span><form method="post" data-confirm="ยืนยันนำเข้าเฉพาะ {{ meta.label }} ตามรายการที่ตรวจแล้ว?">{% csrf_token %}<input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="action" value="confirm"><input type="hidden" name="token" value="{{ preview.token }}"><button class="button button-primary button-compact" type="submit">ยืนยันนำเข้า {{ meta.label }}</button></form></div>
+</section>
+{{ preview.rows|json_script:'master-preview-data' }}
+{% endif %}
+<script src="{% static 'js/master-import.js' %}?v=20261107-02"></script>
+{% endblock %}

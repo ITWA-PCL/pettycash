@@ -1,11 +1,15 @@
 """Settings for the Petty Cash project."""
 from pathlib import Path
 import os
+import json
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-me")
+SECRET_KEY_FALLBACKS = json.loads(os.getenv('DJANGO_SECRET_KEY_FALLBACKS', '[]'))
+if not isinstance(SECRET_KEY_FALLBACKS, list) or any(not isinstance(key, str) for key in SECRET_KEY_FALLBACKS):
+    raise ValueError('DJANGO_SECRET_KEY_FALLBACKS must be a JSON list of strings')
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 
@@ -101,6 +105,7 @@ LOGOUT_REDIRECT_URL = "login"
 AD_GATEWAY_URL = os.getenv("AD_GATEWAY_URL", "")
 AD_APP_ID = os.getenv("AD_APP_ID", "")
 AD_SECRET_KEY = os.getenv("AD_SECRET_KEY", "")
+AD_ORIGIN_IP = os.getenv('AD_ORIGIN_IP', '')
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_API_BASE_URL = os.getenv("TELEGRAM_API_BASE_URL", "https://api.telegram.org")

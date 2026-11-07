@@ -4,6 +4,7 @@
 <section class="dashboard-header"><div><span class="eyebrow">MASTER DATA</span><h1>{% if can_manage_budgets %}Budget และ BU{% else %}Budget{% endif %}</h1><p class="muted">Budget แสดงตามแผนกเจ้าของรายการ{% if can_manage_budgets %} · BU ใช้ค่า Distribution Rule{% endif %} ไม่มีการกำหนดจำนวนเงินในหน้านี้</p></div></section>
 
 {% if can_manage_budgets %}
+<section class="card master-import-launch"><div><h2>นำเข้าจาก Excel</h2><p class="muted">เลือกนำเข้าแยกส่วน พร้อมตรวจรายการก่อนยืนยัน</p></div><div class="budget-row-actions"><a class="button button-secondary button-compact" href="{% url 'budget_import' %}?kind=bu">นำเข้า BU</a><a class="button button-primary button-compact" href="{% url 'budget_import' %}?kind=budget">นำเข้า Budget</a></div></section>
 <details class="card master-editor" {% if editing or form.errors %}open{% endif %}>
   <summary>{% if editing %}แก้ไข Budget{% else %}+ เพิ่ม Budget{% endif %}</summary>
   <form method="post" class="budget-form" data-confirm="ยืนยันบันทึก Budget นี้?">

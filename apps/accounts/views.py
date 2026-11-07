@@ -26,6 +26,12 @@ def can_manage_users(user):
 manage_users_required = user_passes_test(can_manage_users)
 
 
+@login_required
+def signature_image(request):
+    from .signatures import signature_response
+    return signature_response(request.user)
+
+
 def is_last_active_admin(user):
     if not (user.is_superuser or user.has_role(SUPER_ADMIN)):
         return False

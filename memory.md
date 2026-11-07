@@ -2,6 +2,22 @@
 
 > ใช้ภาษาไทยในการบันทึกและส่งต่องานต่อจากนี้ คงชื่อไฟล์ คำสั่ง รหัสสถานะ และชื่อทางเทคนิคตามจริง อ่านบันทึกวันที่ล่าสุดก่อน เพราะข้อกำหนดเก่าอาจถูกปรับแล้ว
 
+## 7 พฤศจิกายน 2026 — งานใหม่ยังไม่ขึ้น Git ตามคำสั่งผู้ใช้
+
+- คำสั่งล่าสุดเปลี่ยนเป็นอนุมัติ commit/push ชุด Import BU/Budget + ตั้งค่าระบบ + เก็บความพร้อมขึ้น process-flow ของ ITWA-PCL/pettycash แล้ว ส่ง PR ตรวจเข้า main ตามข้อตกลง ไม่อนุมัติ merge/deploy หรือเปิด scheduler จริง สถานะห้าม push ด้านล่างเป็นประวัติก่อนคำอนุมัตินี้
+
+- ตรวจความพร้อมก่อน push: แก้รูปเซ็นผ่าน endpoint ตรวจสิทธิ์แทน /media/ ที่ VPS ปิด แก้หน้าพิมพ์ผู้ลงนามว่าง; ทำ import แบบ bulk และ lock ร่วมกับเว็บ/CLI; เตรียม scheduler บน VPS แบบ opt-in PC_SCHEDULERS_ENABLED=false เริ่มต้น ต้องให้หัวหน้าติดตั้ง launcher รุ่นใหม่และเปิดเอง ไม่เริ่มบริการจริง เปลี่ยนคำแนะนำ AD ไปหน้าตั้งค่าและรักษา Origin IP ตอน export ผลชุดเต็ม PostgreSQL 344 ผ่าน และเฉพาะ AD/server profile ล่าสุด 32 ผ่าน (มี test เพิ่ม 1 รวมไฟล์ปัจจุบัน 345); migration check/build production/Compose/Bash syntax ผ่าน รายละเอียดใน handoff.md ยังไม่ commit/push/merge/deploy และยังไม่ทดสอบ AD/Telegram จริงบน VPS หลังแก้
+
+- ปรับหน้าตั้งค่าตามรีวิวว่าช่องมากเกิน: หน้าปกติมี URL เว็บ, AD URL/App ID/Secret และ Telegram Token/Webhook Secret เป็นหลัก Origin IP/Group ID พับเป็นตัวเลือก ค่า PostgreSQL/Redis/Secret Key/Traefik ยังมีแต่พับขั้นสูง ไม่ต้องกรอกใหม่ในการใช้ประจำ คงค่าเดิมและ prefill AD จาก environment เดิม สถานะครบเป็นการตรวจค่า ไม่ใช่ผลเชื่อมต่อจริง ตรวจส่วนที่เปลี่ยน 20 tests/Chromium ผ่าน ไม่เปลี่ยนข้อมูลจริงหรือค่า VPS และยังไม่ขึ้น Git
+- ผู้ใช้ขอปรับดีไซน์และแยก Import BU กับ Budget แล้ว ทำเป็นสองแท็บ/สองปุ่ม แม่แบบแยกชีต อัปโหลดลากวาง การ์ดเลือกวิธีและตารางตรวจพร้อมค้นหา/แบ่งหน้า แต่ละส่วนเปลี่ยนเฉพาะตน รองรับ Excel เดิมสองชีตโดยไม่อ่านอีกชีต Token/session/state แยกตามชนิด ไม่มี migration เพิ่มจากงานปรับหน้านี้ ชุดเต็มล่าสุด 334 tests และ Chromium คอม/มือถือ/light/dark ผ่าน พร้อมดูบน localhost:8000 โดยยังไม่ขึ้น Git หรือ VPS
+- ผู้ใช้ดู localhost:8000/tsc17api แล้วไม่เห็นของใหม่ เพราะเว็บยังรันโค้ดเก่า จึงเปิดโค้ดใหม่ในเครื่องให้แล้วด้วย image pettycash-local-review:20261107 และ override D:\Python\output\pettycash-local-review-20261107.yml สำรอง DB ก่อนใช้ core 0026/0027 คง media เดิมและตรวจข้อมูลครบ 12 ผู้ใช้/4 คำขอ/5 จ่าย/37 flow/78 BU/264 Budget เว็บและเมนูใหม่ตอบ 200 ไม่แตะ VPS และยังไม่ commit/push
+- ผู้ใช้อนุญาตทำข้อ 2 Import BU/Budget แล้ว ใช้ Excel เดิมเป็นแม่แบบ เพิ่มหน้า import ตรวจตัวอย่างก่อนยืนยัน เลือก merge/replace master มีสิทธิ์ตามผู้จัดการ master, audit, transaction และกัน preview เก่า/ยืนยันซ้ำ ไม่แก้ข้อมูลคำขอเก่า
+- เพิ่มช่องกรอก AD/Telegram/URL เว็บจริงและปุ่มตั้ง webhook ชัดเจน ค่าแอปใช้ข้อมูลจากหน้าเว็บได้ทันที Bot เดิมใช้ได้โดยย้าย webhook ไปเว็บจริง ลิงก์ใหม่ใช้ URL ปัจจุบัน ไม่มีการแก้ข้อความ Telegram เก่าและไม่มีการส่งจริงในรอบทดสอบ
+- ผู้ใช้ยืนยันให้แก้ค่าตั้งต้นผ่านเว็บด้วย เพิ่ม encrypted server profile ให้แก้ PostgreSQL/Redis/Secret Key/Allowed Hosts/CSRF/Traefik และดาวน์โหลด production.env ให้ผู้ดูแล VPS นำไปใช้ การแก้ bootstrap ต้อง recreate container ไม่เปลี่ยน live process หรือฐานข้อมูลเอง เก็บคีย์เริ่มต้นสำหรับเปิดเว็บครั้งแรกไว้นอก Git
+- เพิ่ม cryptography, SecretTextField, migration core 0026/0027 และ SECRET_KEY_FALLBACKS สำหรับอ่านค่าลับเดิมเมื่อหมุนคีย์ Profile/Telegram/AD secrets ไม่แสดงกลับใน HTML/log มี CSRF/admin gate และ no-store
+- ฐาน branch ในเครื่อง fast-forward จาก ecb7c03 ถึง origin/main d311364 (ชุดที่เจ้าของ merge/deploy แล้ว) งานวันนี้แก้อยู่ใน D:\Python\pettycash-process-flow เท่านั้น ยังไม่ commit/push ตามคำสั่งชัดเจน ห้ามขึ้น Git เองจนผู้ใช้สั่ง ใช้ migration บนฐานในเครื่องหลังสำรองเพื่อให้ดูหน้าใหม่แล้ว แต่ไม่ใช้ migration หรือ deploy บน VPS
+- ชุดเต็มล่าสุดผ่าน 327 tests พร้อม check/migration consistency, Chromium คอม/มือถือ 4 หน้า, production profile probe, migration round trip และ environment runtime probe ผ่าน รายละเอียดอยู่ handoff ล่าสุด ยังไม่ commit/push/deploy ตามคำสั่ง
+
 ## ปิดงาน 2 พฤศจิกายน 2026 — ผู้ใช้ยืนยันย้ายการอัปเดตไป repo ใหม่
 
 - จากนี้พัฒนาที่ D:\Python\pettycash-process-flow, origin ITWA-PCL/pettycash, branch process-flow แล้วอัปเดตผ่าน PR ไม่ push เข้า main โดยตรง เจ้าของโครงการกับโก้ตรวจ/อนุมัติก่อน merge และ deploy ต้องอนุมัติเป็นรายครั้ง

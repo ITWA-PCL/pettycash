@@ -4,6 +4,45 @@ Baseline: PR #1 at ecb7c033399ff7814df0ddafd4c35064131100de (checked 2026-11-03)
 Keep changes in a separate deployment branch/PR. Do not modify Dev's
 docker-compose.yml, business Flow, or development instructions.
 
+## Local application settings update — 2026-11-07, not published or deployed
+
+Application settings now accept AD and Telegram credentials and the current public
+URL through the admin UI. Saving settings does not call Telegram; webhook
+registration requires the separate explicit POST button. Existing environment
+credentials remain a fallback. PC_INTEGRATIONS_ENABLED still controls only the
+environment fallback; database settings have their own existing enable switches.
+
+The server profile UI stores an encrypted pending profile and offers a private
+production.env download. It does not mount host configuration into the web
+container, access Docker, restart processes or alter database users/passwords.
+The owner still reviews and installs the file, retaining mode 600, existing
+data/roles, backup requirements and the approved deployment launcher.
+PUBLIC_BASE_URL remains tied to pettycash.windowasia.com for this gateway.
+Configured DB ports/private hosts and Redis URLs are validated rather than
+restricted to the old hardcoded defaults. Secure cookies, HTTPS redirect and
+DEBUG=false remain mandatory. New app credentials use encryption rooted in the
+stable Django key; migrations core 0026/0027 require the new cryptography dependency.
+Downloaded profiles include prior-key fallbacks if the operator changes the key;
+keep those fallbacks until credential rotation has been completed deliberately.
+No local change in this section authorizes a live deployment.
+
+## ตรวจความพร้อมก่อน push — 7 พฤศจิกายน 2026 (เฉพาะในเครื่อง)
+
+- ลายเซ็นเปลี่ยนจาก URL `/media/` เป็น endpoint ของ Django ที่ตรวจ login
+  และสิทธิ์ดูคำขอแล้ว หน้าพิมพ์ดูได้เฉพาะลายเซ็นของผู้ลงนามในใบที่เสร็จสิ้น
+  โดยต้องเปิดฟังก์ชันพิมพ์ ไม่เปิด raw media บน nginx
+- เพิ่มบริการ `daily-reminders` และ `log-cleanup` ใน Compose profile `schedulers`
+  ค่าเริ่มต้นยังปิด ผู้ดูแล VPS เปิดด้วย `PC_SCHEDULERS_ENABLED=true` ใน production.env
+  และต้องติดตั้ง deploy/deploy.sh รุ่นนี้ที่ trusted launcher ก่อน deploy รอบใหม่
+  launcher หยุดงานเหล่านี้ก่อน backup/migrate และเริ่มหลัง public readiness ผ่าน
+  ถ้าปิดสวิตช์ บริการเหล่านี้จะไม่เริ่มหลัง deploy
+- scheduler ตรวจรับเงินอัตโนมัติ/แจ้งเตือนทุก 5 นาที และล้าง log ทุก 24 ชั่วโมง
+  การเปิดใช้งานอาจเปลี่ยนสถานะใบค้างและส่ง Telegram ตามการตั้งค่าปัจจุบันทันที
+  ให้ผู้ดูแลตรวจข้อมูล/อนุมัติเปิดใช้งานบน VPS แยกต่างหาก
+- ค่า AD/Telegram ที่บันทึกในเว็บมีผลโดยไม่ต้อง restart แต่ค่า bootstrap ในหน้า
+  ขั้นสูงเป็นชุดค่ารอใช้งาน ต้องให้ผู้ดูแลนำไฟล์ไปติดตั้ง ไม่เปลี่ยนฐานข้อมูลหรือ
+  รหัสผ่าน PostgreSQL จริงด้วยการบันทึกหน้าเว็บ
+
 ## Architecture
 
 - Compose project pettycash with isolated DB/media/static volumes.
@@ -13,7 +52,8 @@ docker-compose.yml, business Flow, or development instructions.
 - Only nginx joins the existing external Traefik network.
 - HTTPS-only router for pettycash.windowasia.com.
 - nginx replaces forwarded scheme headers; Django enables secure cookies.
-- No scheduled reminders, automatic receipt confirmation or log cleanup.
+- Scheduled reminders, automatic receipt confirmation and log cleanup are opt-in
+  through PC_SCHEDULERS_ENABLED and the schedulers Compose profile; off by default.
 - PC_INTEGRATIONS_ENABLED=false clears settings-level AD/Telegram values only.
   It does not guarantee integrations configured in the application database are
   disabled. Inspect the applicable configuration paths before connecting real
@@ -21,11 +61,12 @@ docker-compose.yml, business Flow, or development instructions.
 - HSTS is deferred pending TLS/recovery verification.
 - Current nginx upload limit is 20 MB; confirm against the existing app.
 
-## Confirmed readiness blocker
+## Signature privacy (updated 2026-11-07)
 
-The signature setup and claim print templates directly use signature.url.
-These images will not work with private media until an appropriate
-authenticated signature endpoint is supplied. Do not expose all media.
+Signature setup and claim print use authenticated application endpoints.
+Raw media remains blocked. Tests cover authorized viewers, unrelated users,
+disabled print, unfinished claims and missing files. Verify again on staging
+with real persisted media before activating production.
 
 ## Owner confirmations before activation
 

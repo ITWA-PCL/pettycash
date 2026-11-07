@@ -27,6 +27,7 @@ from .models import (
     REQUESTER_STATUS_GROUP_LABELS, pending_cfo_acknowledgement_ids, pending_cfo_approval_q,
 )
 from apps.accounts.roles import ACCOUNTANT, SUPER_ADMIN
+from apps.core.integrations import public_base_url, telegram_secret
 from apps.core.models import Budget, Notification, TelegramWebhookCheck
 from apps.core.audit import log_event
 from apps.core.pagination import paginate
@@ -532,8 +533,8 @@ def telegram_action_keyboard(claim, actor=None):
             ]
         }
     if claim.status == ClaimRequest.Status.PENDING_PAYMENT:
-        if settings.PUBLIC_BASE_URL.startswith("https://"):
-            detail_url = f"{settings.PUBLIC_BASE_URL.rstrip('/')}{reverse('claim_detail', kwargs={'claim_id': claim.id})}"
+        if public_base_url().startswith("https://"):
+            detail_url = f"{public_base_url()}{reverse('claim_detail', kwargs={'claim_id': claim.id})}"
             return {"inline_keyboard": [[{"text": "💸 เปิดหน้าบันทึกจ่ายเงิน", "url": detail_url}]]}
         return None
     if claim.status == ClaimRequest.Status.PAID:
@@ -670,7 +671,9 @@ def confirm_telegram_webhook_check(callback: dict) -> None:
 def telegram_webhook(request):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    if not settings.TELEGRAM_WEBHOOK_SECRET or request.headers.get("X-Telegram-Bot-Api-Secret-Token") != settings.TELEGRAM_WEBHOOK_SECRET:
+    from secrets import compare_digest
+    secret = telegram_secret()
+    if not secret or not compare_digest(request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""), secret):
         return HttpResponse(status=403)
     try:
         callback = json.loads(request.body).get("callback_query")
@@ -1509,11 +1512,19 @@ def claim_print(request, claim_id):
         raise Http404("ปิดการใช้งานเอกสารสำหรับพิมพ์")
     if claim.status != ClaimRequest.Status.COMPLETED:
         raise Http404("พิมพ์ได้เฉพาะรายการที่เสร็จสิ้นแล้ว")
+    signers, auto_received, first_approver_is_executive = claim_print_signers(claim)
+    difference = claim.requested_total - (claim.actual_total or Decimal("0.00"))
+    return render(request, "claims/claim_print.html", {"claim": claim, "signers": signers, "auto_received_at": auto_received.created_at if auto_received else None, "difference": difference, "has_excess": claim.has_excess, "settlement_amount": claim.settlement_amount, "first_approver_is_executive": first_approver_is_executive, "total_words": thai_baht_text(claim.requested_total)})
+
+
+def claim_print_signers(claim):
     records = list(claim.approval_records.select_related("actor").all())
     approved_records = [record for record in records if record.action == ClaimApproval.Action.APPROVED]
 
     def signer(user, record=None):
-        return {"user": user, "signed_at": record.created_at if record else None}
+        return {"user": user, "signed_at": record.created_at if record else None,
+                "display_name": (user.get_full_name() or user.username) if user else "",
+                "signature_url": reverse("claim_signature_image", args=[claim.pk, user.pk]) if user and user.signature else ""}
 
     submitted = next((record for record in records if record.action == ClaimApproval.Action.SUBMITTED), None)
     paid = next((record for record in records if record.action == ClaimApproval.Action.PAID), None)
@@ -1533,8 +1544,20 @@ def claim_print(request, claim_id):
         "accountant": signer((supplemental_paid or paid).actor if (supplemental_paid or paid) else claim.accountant, supplemental_paid or paid or completed),
         "receiver": signer(received.actor if received else (None if auto_received else claim.requester), received),
     }
-    difference = claim.requested_total - (claim.actual_total or Decimal("0.00"))
-    return render(request, "claims/claim_print.html", {"claim": claim, "signers": signers, "auto_received_at": auto_received.created_at if auto_received else None, "difference": difference, "has_excess": claim.has_excess, "settlement_amount": claim.settlement_amount, "first_approver_is_executive": bool(executive_approval and not supervisor_approval), "total_words": thai_baht_text(claim.requested_total)})
+    return signers, auto_received, bool(executive_approval and not supervisor_approval)
+
+
+@login_required
+def claim_signature_image(request, claim_id, user_id):
+    from apps.accounts.signatures import signature_response
+    claim = visible_claim_or_404(request.user, claim_id)
+    if not get_system_settings().claim_print_enabled or claim.status != ClaimRequest.Status.COMPLETED:
+        raise Http404
+    signers, _, _ = claim_print_signers(claim)
+    for signer in signers.values():
+        if signer["user"] and signer["user"].pk == user_id:
+            return signature_response(signer["user"])
+    raise Http404
 
 
 @login_required
