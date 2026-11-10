@@ -22,7 +22,7 @@
     let loading = false;
     let lastMarkup = null;
     const refresh = async () => {
-      if (loading || document.visibilityState !== 'visible') return;
+      if (loading || !region.isConnected || document.visibilityState !== 'visible') return;
       loading = true;
       try {
         const response = await fetch(region.dataset.refreshUrl, {cache: 'no-store', credentials: 'same-origin'});
@@ -39,8 +39,13 @@
         loading = false;
       }
     };
-    window.setInterval(refresh, 30000);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+    const timer = window.setInterval(refresh, 30000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('page:before-replace', () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    }, { once: true });
   })();
 </script>
 {% endblock %}

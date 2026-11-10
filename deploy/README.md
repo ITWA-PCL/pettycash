@@ -45,6 +45,17 @@ No local change in this section authorizes a live deployment.
 
 ## Architecture
 
+- ปรับ static delivery ใน local วันที่ 10 พ.ย. 2026: gzip เฉพาะ `/static/`
+  สำหรับ CSS/JS/JSON/SVG/text ขนาดอย่างน้อย 1 KB ไม่เปิด gzip/cache ให้หน้า
+  แอปหรือไฟล์ส่วนตัว URL static ที่มี `?v=` ใช้ cache 24 ชั่วโมงและต้องเพิ่ม
+  เวอร์ชันเมื่อแก้ไฟล์ URL ที่ไม่มีเวอร์ชันให้ revalidate ทุกครั้ง (ETag/304)
+  ไม่ cache static 404 และคง release header รวมถึง raw media 404 ตามเดิม
+  ทดสอบ nginx:1.28-alpine ใน container จำลองแยกแล้ว CSS 116,134 → 23,412
+  bytes เนื้อหาหลังแตก gzip เท่ากันทุก byte; compression/identity/proxy/
+  Cache-Control/304/404/private upstream ผ่าน ยังไม่ deploy หรือวัดผลบน VPS หลังแก้
+  อ้างอิง [gzip](https://nginx.org/en/docs/http/ngx_http_gzip_module.html)
+  และ [headers](https://nginx.org/en/docs/http/ngx_http_headers_module.html)
+
 - Compose project pettycash with isolated DB/media/static volumes.
 - Gunicorn runs as appuser. No host ports or source bind mount.
 - Dedicated nginx serves collected static files; it does not mount media.
