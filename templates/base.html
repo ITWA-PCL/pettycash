@@ -10,10 +10,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="{% static 'img/Petty Cash Form.png' %}">
     <link rel="apple-touch-icon" href="{% static 'img/Petty Cash Form.png' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261107-04">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261110-02">
     <script src="{% static 'js/searchable-select.js' %}?v=20261019-01"></script>
   </head>
   <body>
+    <div id="navigation-progress" class="navigation-progress" aria-hidden="true" hidden></div>
+    <div id="navigation-status" class="navigation-status" role="status" aria-live="polite" hidden></div>
     {% if user.is_authenticated %}
       <header class="topbar">
         <a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark">฿</span> Petty Cash</a>
@@ -115,7 +117,7 @@
         window.__pageRouteHistory = { visit, push, previous };
         visit(window.location.href);
       })();
-      document.addEventListener('click', (event) => { const pageBack = event.target.closest('#page-back'); if (!pageBack) return; const previous = window.__pageRouteHistory?.previous(); window.location.assign(previous || pageBack.dataset.fallback); });
+      document.addEventListener('click', (event) => { const pageBack = event.target.closest('#page-back'); if (!pageBack) return; const previous = window.__pageRouteHistory?.previous(); const destination = previous || pageBack.dataset.fallback; if (window.__navigateToPage) window.__navigateToPage(destination); else window.location.assign(destination); });
       const loadingOverlay = document.getElementById('page-loading-overlay'); let isPageSubmitting = false; const showPageLoading = (submitter) => { if (isPageSubmitting) return; isPageSubmitting = true; document.body.classList.add('is-page-loading'); loadingOverlay?.classList.add('is-visible'); loadingOverlay?.setAttribute('aria-hidden', 'false'); const button = submitter || document.querySelector('button[type="submit"]'); if (button) { button.classList.add('is-loading'); button.disabled = true; } }; const hidePageLoading = () => { isPageSubmitting = false; document.body.classList.remove('is-page-loading'); loadingOverlay?.classList.remove('is-visible'); loadingOverlay?.setAttribute('aria-hidden', 'true'); }; window.addEventListener('pageshow', hidePageLoading);
       const submitWithHistoryReplace = async (form, submitter) => { showPageLoading(submitter); try { const response = await fetch(form.action, { method: 'POST', credentials: 'same-origin', headers: { 'X-History-Replace': '1' }, body: new FormData(form) }); const payload = await response.json(); if (!response.ok || !payload.redirect) throw new Error('Unable to replace history'); window.location.replace(payload.redirect); } catch (_) { hidePageLoading(); form.submit(); } };
       document.addEventListener('submit', (event) => { if (event.defaultPrevented) return; const form = event.target; if (!(form instanceof HTMLFormElement) || form.closest('.confirm-dialog')) return; if (isPageSubmitting) { event.preventDefault(); return; } if (form.dataset.confirmed === 'true') { form.dataset.confirmed = ''; if (form.dataset.historyReplace === 'true') { event.preventDefault(); submitWithHistoryReplace(form, event.submitter); return; } showPageLoading(event.submitter); return; } const submitter = event.submitter; const message = submitter?.dataset.confirm || form.dataset.confirm; if (!message) { showPageLoading(submitter); return; } event.preventDefault(); const dialog = document.getElementById('confirm-dialog'); document.getElementById('confirm-message').textContent = message; dialog.showModal(); dialog.addEventListener('close', () => { if (dialog.returnValue === 'confirm') { form.dataset.confirmed = 'true'; form.requestSubmit(submitter); } }, {once: true}); });
@@ -221,59 +223,7 @@
         preserved.value = button.value;
       }, true);
     </script>
-    <script>
-      // Keep normal POST forms as full navigations.  GET links only replace
-      // the page content so navigation stays responsive without changing
-      // workflow, CSRF, or download behavior.
-      (() => {
-        let pageContent = document.getElementById('page-content');
-        let isNavigating = false;
-        if (!pageContent || !window.fetch || !window.history.pushState) return;
-        if (!history.state?.partialNavigation) history.replaceState({ partialNavigation: true, scrollY: window.scrollY }, '', window.location.href);
-
-        const saveScroll = () => history.replaceState({ ...(history.state || {}), partialNavigation: true, scrollY: window.scrollY }, '', window.location.href);
-        const runContentScripts = (container) => container.querySelectorAll('script').forEach((oldScript) => {
-          const script = document.createElement('script');
-          [...oldScript.attributes].forEach((attribute) => script.setAttribute(attribute.name, attribute.value));
-          script.textContent = oldScript.textContent;
-          oldScript.replaceWith(script);
-        });
-        const loadPage = async (url, { push = false, restoreScroll = 0 } = {}) => {
-          if (!pageContent) return window.location.assign(url);
-          if (isNavigating) return;
-          isNavigating = true;
-          pageContent.setAttribute('aria-busy', 'true');
-          try {
-            const response = await fetch(url, { credentials: 'same-origin', headers: { 'X-Partial-Navigation': '1' } });
-            if (!response.ok) throw new Error('Unable to load page');
-            const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
-            const nextContent = nextDocument.getElementById('page-content');
-            if (!nextContent) throw new Error('Page content was not found');
-            document.title = nextDocument.title || document.title;
-            pageContent.replaceWith(nextContent);
-            pageContent = nextContent;
-            runContentScripts(pageContent);
-            if (push) history.pushState({ partialNavigation: true, scrollY: 0 }, '', url);
-            if (push) window.__pageRouteHistory?.push(url); else window.__pageRouteHistory?.visit(url);
-            requestAnimationFrame(() => window.scrollTo(0, restoreScroll));
-          } catch (_) {
-            window.location.assign(url);
-          } finally {
-            pageContent?.removeAttribute('aria-busy');
-            isNavigating = false;
-          }
-        };
-        document.addEventListener('click', (event) => {
-          const link = event.target.closest('a[href]');
-          if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download') || link.dataset.noPartialNavigation !== undefined || link.origin !== window.location.origin || (link.pathname === window.location.pathname && link.search === window.location.search && link.hash)) return;
-          event.preventDefault(); if (isNavigating) return; saveScroll(); loadPage(link.href, { push: true });
-        });
-        window.addEventListener('popstate', (event) => {
-          if (!event.state?.partialNavigation) return;
-          loadPage(window.location.href, { restoreScroll: event.state.scrollY || 0 });
-        });
-      })();
-    </script>
+    <script src="{% static 'js/page-navigation.js' %}?v=20261110-01"></script>
     <script>
       (() => {
         const topbar = document.querySelector('.topbar');

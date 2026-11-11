@@ -2,6 +2,32 @@
 
 > ใช้ภาษาไทยในการบันทึกต่อจากนี้ คงชื่อไฟล์ คำสั่ง รหัสสถานะ และชื่อทางเทคนิคตามจริง อ่านบันทึกวันที่ล่าสุดก่อน เพราะข้อกำหนดเก่าอาจถูกปรับแล้ว
 
+## ปิดงาน 10 พฤศจิกายน 2026 — อนุมัติส่ง Git
+
+- ผู้ใช้สั่ง push พร้อมสรุปงานวันนี้แล้ว ยกเลิกข้อพัก push ของงานวันที่ 10 ด้านล่าง ส่งผ่าน process-flow → PR ใหม่ให้เจ้าของตรวจ ไม่รวม merge/deploy หรือเปลี่ยนค่า VPS
+- ตรวจ GitHub จริง: PR #3 ถูกเจ้าของ merge เมื่อ 7 พ.ย. ฐาน main ปัจจุบัน 92577f5 ตรง release ที่วัดจาก VPS local เดิม fetch เฉพาะ process-flow จึงดึง ref main เพิ่ม และ fast-forward ฐาน local โดย source เดิมไม่ต่างกัน ไม่ได้ merge PR ใหม่หรือ deploy
+- งานส่งรอบนี้: navigation มี progress/status รับคลิกล่าสุด ย้อนกลับลื่น และเอากรอบคลิกออกแล้ว; dashboard tracker หยุด timer/listener เมื่อออกจากหน้า; nginx gzip/static cache ลด CSS ~80% ไม่เปลี่ยนหน้าตา/flow/DB ไม่มี migration เพิ่ม ไม่ cache หน้าข้อมูลการเงิน
+- ผลตรวจส่งงาน: PostgreSQL 345 tests ผ่าน, GET 21 จุด/รายงาน/ไฟล์อ้างอิงผ่าน, Chromium จำลองเน็ตช้า/กดซ้ำ/Back/download/POST และหน้าจอจริงคอม/มือถือ/มืดผ่าน, nginx1.28 syntax/compression/cache/304/private/mediaผ่าน รายละเอียดและหลักฐานอยู่หัวข้อด้านล่าง
+- รอบหน้าหลังหัวหน้าอนุมัติ merge/deploy: ตรวจ gzip/Cache-Control บนโดเมนจริงและวัดความเร็วซ้ำ ลอง navigation/Back ด้วยแต่ละบทบาท AD ยังพักรอผู้ใช้พร้อม ไม่ถือว่าการวัด anonymous เป็นการผ่าน UAT หลังล็อกอิน และไม่ต้องทดสอบ 11 ข้อใหม่ทั้งหมดหากไม่มี flow เปลี่ยน
+
+## 10 พฤศจิกายน 2026 — ปรับจังหวะเปลี่ยนหน้าใน local
+
+- ผู้ใช้อนุมัติเตรียมปรับ static delivery ต่อจากผลวัด VPS โดยไม่เปลี่ยน flow/หน้าตา และยังไม่ push: deploy/nginx.conf เปิด gzip เฉพาะ /static/ ระดับ5 ขั้นต่ำ1KB กำหนด Vary Accept-Encoding รองรับหลัง proxy; staticมี ?v= cache24ชม./ต้องเปลี่ยนversionเมื่อแก้ ส่วนไม่ใส่version revalidateทุกครั้ง 304 คง release headerที่locationให้ถูกnginx1.28 ไม่ cache404 ไม่เปิดcache/gzipเพิ่มที่หน้าการเงินหรือ private media
+- ทดสอบ nginx:1.28-alpine จริงใน projectจำลอง pettycash-static-check-20261110 พร้อม mock upstream ไม่มีenv/DBจริงและลบcontainer/networkทดสอบแล้ว: nginx -t ผ่าน gzip CSS116134→23412 bytes (-79.8%), navigationJS5885→2133 (-63.8%), searchableJS6072→1833 (-69.8%); แตกgzipเทียบbyteเดิมตรงทุกไฟล์, identity fallback, proxy/Vary, versioned/unversionedCache-Control, 304, static404ไม่cache, media404, releaseheader, upstreamprivate no-storeสดทุกrequestผ่าน หลักฐาน output/petty-ui-check/static-delivery-results-20261110.json ยังไม่แก้ VPS หรือสรุป latencyใหม่ ไม่มีmigration/DB/flowเปลี่ยน
+
+- วัด VPS ตามคำขอล่าสุดแบบ anonymous GET ไม่มี cookie/login/ข้อมูลเปลี่ยนและยังไม่ push: 19 GET VPS + 6 local + 13 VPS ใช้ connection เดิม ผลใหม่ทุก connection login median TTFB/total 1.045s (6 รอบ), CSS 1.462s (6 รอบ), JS .712s (4 รอบ); DNS median ~10ms, TCP connect cumulative ~230ms, TLS cumulative ~492ms เมื่อใช้ connection ซ้ำ login median .303s (4 reused), JS .226s (5 reused), CSS .450s (3 reused) ทุก request สำเร็จ 200 ยกเว้น root anonymous 302 ไป login ตามปกติ ไม่มี timeout; local login median .063s
+- เฉพาะไฟล์ที่วัด ไม่มี Content-Encoding แม้ client ส่ง Accept-Encoding ผ่าน --compressed และ CSS ~114,607 bytes ไม่มี Cache-Control header พบ release 92577f5e606469a35a3cd383ccab9487a8188815 บน response; ยังไม่ได้ fetch remote Git หรือแก้ production ไม่มีสิทธิ์สรุปว่าตรงกับ local HEAD
+- ข้อสรุปการวัด: connection/network มีส่วนชัดเจน; login reused ช้ากว่า static JS ประมาณ .077s แต่ส่วนต่างไม่ใช่ pure Django/DB time แยก CPU/DB/proxy ภายในไม่ได้ และ curl ใช้ HTTP/1.1 จึงไม่แทน Chrome HTTP/2 หรือหน้า authenticated แนะนำพิจารณาบีบอัด text assets/ตั้ง cache เฉพาะ static + งาน navigation local ที่เตรียมไว้ ไม่ cache หน้าการเงิน ยังไม่ได้แก้ nginx/แอปเพิ่มจากการวัดหรือปรับสเปก VPS หลักฐาน D:\Python\output\petty-ui-check\vps-timing-20261110.json และ vps-reused-timing-20261110.json
+
+- ตรวจระบบรอบล่าสุดตามคำขอผู้ใช้: PostgreSQL ชุดเต็ม 345 tests ผ่าน (99 วินาที) ไม่มี migration/model ค้าง ตรวจ view GET 21 จุดรวมหน้าแรก/รายการ/สร้าง/คิว/ตั้งค่า/BU-Budget/รายละเอียดทั้ง 4 ใบ/Export ได้ 200 ใช้ transaction READ ONLY ปิด outgoing HTTP และ mock เฉพาะการเขียน audit ของ export ในสคริปต์ตรวจ ZIP/XML รายงาน Excel อ่านผ่าน ไม่พบไฟล์ลายเซ็น/แนบ/สลิปที่อ้างใน DB แต่หาย และ static finder พบทรัพยากรหลักครบ (รูปแบรนด์อยู่ img/ ที่ mapping ไป static/img ไม่ใช่ไฟล์หาย) บริการ local ครบ 5 ตัว DB healthy; log 30 นาทีล่าสุดไม่พบ traceback/HTTP500/DB error ไม่ได้ทดสอบ AD หรือส่ง Telegram จริง ยังไม่พบข้อแก้เพิ่มจากรอบตรวจนี้
+- ผู้ใช้ขอเอากรอบลิงก์ตอนคลิกออก ลบ style .is-navigation-target แล้ว คง progress และจังหวะเปลี่ยนหน้าเดิม CSS version 20261110-02; งานวันที่ 10 นี้ยังไม่ commit/push/VPS
+
+- ผู้ใช้แจ้งชุดที่อัปขึ้นจริงใช้งานได้แล้ว ยกเว้น AD ที่พักตรวจฝั่ง server ตามคำขอ ไม่สรุปว่าเป็นความผิดฝั่ง AD แน่นอน ตรวจ local เทียบ 7 ข้อด้วย 67 tests ผ่าน ไม่มี migration ค้าง หน้า login 200 ค่า local ออกก่อน 3 วัน/ยืม 1 วัน
+- ปรับตามอาการกดลิงก์แล้วนิ่ง: แยก navigation ออกจาก base เป็น static/js/page-navigation.js แสดงแถบตอบรับทันทีและข้อความเมื่อรอนานกว่า 350ms คงหน้าเดิมระหว่างรอ สลับเนื้อหาแบบเคลื่อนไหวเบา 140ms รองรับ reduced motion; ยกเลิกคำขอเดิมและป้องกันผลเก่าทับคลิกล่าสุด รองรับปุ่มย้อนกลับ/Back และ full navigation เมื่อ session เปลี่ยน ไม่ prefetch หรือ cache หน้าการเงิน ไม่เปลี่ยน POST และให้ export/download/preview/print ใช้ทางเดิม
+- หยุด interval และ visibility listener ของ dashboard tracker เมื่อออกจากหน้า ลดคำขอพื้นหลังที่สะสมเมื่อกลับหน้าหลักหลายรอบ CSS/JS version 20261110-01
+- ตรวจ: Chromium จำลองเครือข่ายช้า/กดซ้ำ/Back/anchor/download/POST/cache no-store/mobile/reduced-motion ผ่าน รวมตรวจ tracker ไม่เหลือ interval หลังออก; หน้าจอจริง Django home/Budget คอม/มือถือ/มืด ภาษาไทย ไม่มี overflow/JS error ผ่าน; Django tracker/settings 16 tests ผ่าน; diff check ผ่าน อ่านข้อมูล local เพื่อ render ด้วย PostgreSQL read-only transaction เท่านั้น ไม่เปลี่ยนข้อมูลจริงหรือส่ง Telegram
+- หลักฐาน UI/สคริปต์อยู่ D:\Python\output\petty-ui-check\*navigation*20261110* และ real-navigation-*.png การวัด render ใน container ชั่วคราวเป็น local/cold start ไม่ใช่ latency ของ VPS ยังไม่ได้ตรวจเครือข่าย/เวลาตอบกลับ VPS โดยตรง งานปรับหน้าใหม่นี้ยังไม่ commit/push/deploy
+
 ## 7 พฤศจิกายน 2026 — Import Excel และตั้งค่าผ่านเว็บ (งานในเครื่อง ยังไม่ commit/push)
 
 - อนุมัติล่าสุดหลังตรวจความพร้อม: ผู้ใช้สั่งให้ commit/push ชุดงานนี้ขึ้น ITWA-PCL/pettycash branch process-flow แล้ว ส่งตรวจเข้า main ตามข้อตกลงเดิม ไม่รวมการ merge/deploy หรือเปิด scheduler บน VPS ข้อความ “ยังไม่ push” ด้านล่างเป็นสถานะก่อนคำอนุมัติครั้งนี้

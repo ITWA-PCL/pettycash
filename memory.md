@@ -2,6 +2,22 @@
 
 > ใช้ภาษาไทยในการบันทึกและส่งต่องานต่อจากนี้ คงชื่อไฟล์ คำสั่ง รหัสสถานะ และชื่อทางเทคนิคตามจริง อ่านบันทึกวันที่ล่าสุดก่อน เพราะข้อกำหนดเก่าอาจถูกปรับแล้ว
 
+## ปิดงาน 10 พฤศจิกายน 2026 — ผู้ใช้อนุมัติ push
+
+- อนุมัติล่าสุดให้ commit/push งาน navigation + static gzip/cache และสรุปวันนี้แล้ว ส่ง process-flow → PR ใหม่ ไม่รวม merge/deploy ฐาน main92577f5 คือ PR#3 ที่เจ้าของ merge7พ.ย. และตรง releaseVPSที่วัด แก้เพียงrefmainในเครื่องที่เดิมfetchเฉพาะprocess-flowแล้วfast-forwardฐาน sourceเดิมตรงกัน
+- ยืนยันผลตรวจล่าสุด345tests/21GET/รายงาน-ไฟล์/Chromium/nginxผ่าน ไม่เปลี่ยนflow/DB/หน้าตา ไม่มีmigrationเพิ่ม รอบหน้าหลังdeployให้วัดความเร็ว/ตรวจgzip-cacheและลองnavigationแต่ละบทบาท ADยังพัก รายละเอียด handoff.md สถานะ “ยังไม่push” ด้านล่างเป็นประวัติก่อนอนุมัติรอบนี้
+
+## 10 พฤศจิกายน 2026 — เปลี่ยนหน้าให้ตอบรับทันที (local)
+
+- หลังวัดVPS ผู้ใช้อนุมัติเตรียม gzip/cache ที่localแล้ว deploy/nginx.confแก้เฉพาะstatic: versioned24ชม. unversionedrevalidate/304 ไม่cache404/private/appHTML เทียบnginx1.28จริงในcontainerจำลองผ่านทุกกรณี CSS116KB→23KB(-79.8%) แตกกลับbyteเดิมครบ ไม่เปลี่ยนหน้าตา/flow/DB ยังไม่push/deployหรือวัดlatencyVPSหลังแก้ รายละเอียดในhandoff
+
+- วัด VPS แบบไม่ล็อกอินแล้ว: login เปิด connection ใหม่ median1.045s ใช้ connection เดิม .303s; JS reused .226s CSS reused .450s local login .063s ไม่พบ timeout/error (root302ปกติ) CSS114KB/JS/login ไม่มี Content-Encoding ในรอบที่ขอ compressed และ static ที่วัดไม่มี Cache-Control เห็นแนวทาง gzip/cache เฉพาะ static แต่ยังไม่ได้แก้เพิ่ม/ปรับ VPS/push ผลเป็น curlHTTP1.1 ไม่ใช่ authenticated browser หรือ pureCPU/DB time รายละเอียด/ไฟล์หลักฐานใน handoff
+
+- ผลตรวจระบบล่าสุด: ชุดเต็ม PostgreSQL 345 tests ผ่าน GET 21 จุดรวม export และรายละเอียดใบจริงตอบ 200 ใน transaction ห้ามเขียน/ปิด HTTP ออกนอกระบบ; รายงาน ZIP/XML ผ่าน ไฟล์แนบ/สลิป/ลายเซ็นอ้างอิงไม่หาย static finder ครบ ไม่มี migration ค้าง บริการ 5 ตัวทำงาน log 30 นาทีไม่พบ traceback/HTTP500/DB error ยังไม่พบข้อแก้เพิ่ม AD ยังพักและไม่ได้ส่ง Telegram จริง ผู้ใช้ให้เอากรอบตอนคลิกออกแล้ว CSS version 20261110-02 งาน UI วันที่ 10 ยังไม่ commit/push/deploy
+
+- ผู้ใช้ยืนยันชุดบน VPS ใช้ได้ พัก AD ก่อน ตรวจ local 7 ข้อด้วย 67 tests ผ่าน ไม่มี migration ค้าง จากนั้นขอให้เปลี่ยนหน้าลื่นขึ้น: เพิ่ม progress/status ระหว่างรอ ไม่ปิดหน้าเดิม รับคลิกล่าสุดด้วย AbortController ป้องกันผลเก่าทับ แอนิเมชันสั้นรองรับ reduced motion และปุ่มย้อนกลับแบบไม่ reload; ไม่เก็บ cache/prefetch ข้อมูลการเงิน ไม่เปลี่ยน POST/download
+- แก้ dashboard tracker ให้หยุด poll/listener เมื่อออกจากหน้า ตรวจ Chromium ทั้งสถานการณ์จำลองและ template จริงคอม/มือถือ/มืด ผ่าน พร้อม Django 16 tests ที่เกี่ยวข้อง ผลตรวจ/หลักฐานใน handoff.md งานนี้ยังไม่ commit/push/deploy ไม่ได้วัด latency ของ VPS โดยตรง
+
 ## 7 พฤศจิกายน 2026 — งานใหม่ยังไม่ขึ้น Git ตามคำสั่งผู้ใช้
 
 - คำสั่งล่าสุดเปลี่ยนเป็นอนุมัติ commit/push ชุด Import BU/Budget + ตั้งค่าระบบ + เก็บความพร้อมขึ้น process-flow ของ ITWA-PCL/pettycash แล้ว ส่ง PR ตรวจเข้า main ตามข้อตกลง ไม่อนุมัติ merge/deploy หรือเปิด scheduler จริง สถานะห้าม push ด้านล่างเป็นประวัติก่อนคำอนุมัตินี้
