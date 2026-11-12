@@ -1,0 +1,13 @@
+<section class="history-section" aria-labelledby="history-heading">
+  <h2 class="history-heading" id="history-heading">ลงนาม</h2>
+  <div class="final-signoffs">
+    {% for row in final_signoffs %}
+    <div class="final-signoff">
+      <div class="signoff-role">{{ row.label }}</div>
+      <div class="signoff-name">{{ row.name }}</div>
+      <div class="signoff-date">{{ row.at|date:"d/m/Y H:i"|default:"—" }}</div>
+      {% if row.automatic %}<small>ระบบถือว่ารับเงินอัตโนมัติ<br>ผู้ขอไม่ได้กดยืนยัน</small>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>

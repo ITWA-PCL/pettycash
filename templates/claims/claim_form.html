@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}{{ page_title }} | Petty Cash{% endblock %}
 {% block content %}
-  <link rel="stylesheet" href="{% static 'css/thai-month-picker.css' %}?v=20261022-01">
+  <link rel="stylesheet" href="{% static 'css/thai-month-picker.css' %}?v=20261112-01">
   <section class="dashboard-header"><div><span class="eyebrow">คำขอเบิกเงินสดย่อย</span><h1>{{ page_title }}</h1><p class="muted">บันทึกเป็นแบบร่างได้ก่อน ยังไม่ส่งอนุมัติในขั้นนี้</p></div><a class="button button-secondary" href="{% url 'claim_list' %}">คำขอของฉัน</a></section>
   <form method="post" class="claim-form" enctype="multipart/form-data">{% csrf_token %}
     {% if form.non_field_errors %}<div class="alert">{{ form.non_field_errors }}</div>{% endif %}
@@ -76,10 +76,8 @@
     const today = new Date(); let viewed = new Date(today.getFullYear(), today.getMonth(), 1);
     const validDate = (day, month, year) => { const date = new Date(year, month - 1, day); return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day; };
     const selectedDate = () => { const match = display.value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return match && validDate(Number(match[1]), Number(match[2]), Number(match[3])) ? new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1])) : null; };
-    const minimumDate = display.dataset.minDate ? new Date(display.dataset.minDate + 'T00:00:00') : null;
-    const isoDate = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-    const allowedDate = date => !minimumDate || date >= minimumDate || isoDate(date) === display.dataset.acceptedDate;
-    const validateDate = () => { const date = selectedDate(); display.setCustomValidity(date && !allowedDate(date) ? 'เบิกย้อนหลังได้ไม่เกิน 5 วัน; ใบตีกลับใช้วันที่เดิมที่เคยยื่นได้' : ''); };
+    const allowedDate = date => true;
+    const validateDate = () => display.setCustomValidity('');
     const normalize = () => { const digits = display.value.replace(/\D/g, ''); if (digits.length === 8) display.value = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`; validateDate(); return Boolean(selectedDate()); };
     const chooseDate = (date) => { display.value = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; validateDate(); display.dispatchEvent(new Event('change', { bubbles: true })); calendar.hidden = true; };
     const renderCalendar = () => { const selected = selectedDate(); calendar.innerHTML = ''; const head = document.createElement('div'); head.className = 'date-calendar-head'; const previous = document.createElement('button'); previous.type = 'button'; previous.textContent = '‹'; previous.setAttribute('aria-label', 'เดือนก่อน'); previous.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); viewed = new Date(viewed.getFullYear(), viewed.getMonth() - 1, 1); renderCalendar(); }); const label = document.createElement('span'); label.textContent = `${monthNames[viewed.getMonth()]} ${viewed.getFullYear()}`; const next = document.createElement('button'); next.type = 'button'; next.textContent = '›'; next.setAttribute('aria-label', 'เดือนถัดไป'); next.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); viewed = new Date(viewed.getFullYear(), viewed.getMonth() + 1, 1); renderCalendar(); }); head.append(previous, label, next); const week = document.createElement('div'); week.className = 'date-calendar-week'; weekdays.forEach((name) => { const day = document.createElement('span'); day.textContent = name; week.append(day); }); const days = document.createElement('div'); days.className = 'date-calendar-days'; for (let index = 0; index < viewed.getDay(); index += 1) { const empty = document.createElement('span'); empty.className = 'date-calendar-empty'; days.append(empty); } const lastDay = new Date(viewed.getFullYear(), viewed.getMonth() + 1, 0).getDate(); for (let day = 1; day <= lastDay; day += 1) { const dayButton = document.createElement('button'); dayButton.type = 'button'; dayButton.textContent = day; dayButton.disabled = !allowedDate(new Date(viewed.getFullYear(), viewed.getMonth(), day)); const isSelected = selected && selected.getFullYear() === viewed.getFullYear() && selected.getMonth() === viewed.getMonth() && selected.getDate() === day; const isToday = today.getFullYear() === viewed.getFullYear() && today.getMonth() === viewed.getMonth() && today.getDate() === day; dayButton.classList.toggle('is-selected', isSelected); dayButton.classList.toggle('is-today', isToday); dayButton.addEventListener('click', (event) => { event.stopPropagation(); chooseDate(new Date(viewed.getFullYear(), viewed.getMonth(), day)); }); days.append(dayButton); } const todayButton = document.createElement('button'); todayButton.type = 'button'; todayButton.className = 'date-calendar-today'; todayButton.textContent = 'วันนี้'; todayButton.addEventListener('click', (event) => { event.stopPropagation(); chooseDate(today); }); calendar.append(head, week, days, todayButton); };
@@ -90,5 +88,5 @@
     display.closest('form')?.addEventListener('submit', normalize);
   })();
   </script>
-  <script src="{% static 'js/thai-month-picker.js' %}?v=20261022-01"></script>
+  <script src="{% static 'js/thai-month-picker.js' %}?v=20261112-01"></script>
 {% endblock %}

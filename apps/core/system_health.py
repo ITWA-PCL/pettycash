@@ -30,9 +30,8 @@ def _format_bytes(value: int | None) -> str:
     return f"{amount:.1f} TB"
 
 
-def _container_cpu_percent() -> int | None:
-    """Return recent cgroup CPU usage normalized to the container CPU limit."""
-    global _last_cpu_sample
+def _cpu_sample() -> tuple[int, float, float] | None:
+    """Container counters share a clock across workers, unlike Python globals."""
     cpu_stat = _read_cgroup_value("/sys/fs/cgroup/cpu.stat")
     if not cpu_stat:
         return None
@@ -44,12 +43,6 @@ def _container_cpu_percent() -> int | None:
     except (IndexError, ValueError):
         return None
 
-    now = time.monotonic()
-    previous = _last_cpu_sample
-    _last_cpu_sample = (usage_usec, now)
-    if not previous or now <= previous[1]:
-        return None
-
     available_cpus = 1.0
     cpu_max = _read_cgroup_value("/sys/fs/cgroup/cpu.max")
     if cpu_max:
@@ -59,6 +52,20 @@ def _container_cpu_percent() -> int | None:
                 available_cpus = max(float(quota) / float(period), 0.01)
         except ValueError:
             pass
+    return usage_usec, time.monotonic(), available_cpus
+
+
+def _container_cpu_percent(sample=None) -> int | None:
+    """Return recent cgroup CPU usage normalized to the container CPU limit."""
+    global _last_cpu_sample
+    sample = sample if sample is not None else _cpu_sample()
+    if sample is None:
+        return None
+    usage_usec, now, available_cpus = sample
+    previous = _last_cpu_sample
+    _last_cpu_sample = (usage_usec, now)
+    if not previous or now <= previous[1] or usage_usec < previous[0]:
+        return None
     usage = (usage_usec - previous[0]) / 1_000_000 / (now - previous[1]) / available_cpus * 100
     return max(0, min(100, round(usage)))
 
@@ -76,8 +83,10 @@ def get_web_health() -> dict[str, object]:
     except ValueError:
         memory_max = None
     memory_percent = round(memory_current / memory_max * 100) if memory_current is not None and memory_max else None
+    cpu_sample = _cpu_sample()
     return {
-        "cpu_percent": _container_cpu_percent(),
+        "cpu_percent": _container_cpu_percent(cpu_sample) if cpu_sample else None,
+        "cpu_sample": {"usage_usec": cpu_sample[0], "sampled_at": cpu_sample[1], "available_cpus": cpu_sample[2]} if cpu_sample else None,
         "memory_current": _format_bytes(memory_current),
         "memory_limit": _format_bytes(memory_max) if memory_max else "ไม่กำหนด",
         "memory_percent": memory_percent,

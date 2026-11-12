@@ -34,8 +34,8 @@ def build_claim_report(claims, filters):
     specs = (
         ('สรุปคำขอ', 'ClaimsSummary',
          ('เลขที่เอกสาร', 'วันที่ขอ', 'ค่าใช้จ่ายของเดือน', 'ประเภท', 'ผู้ขอ', 'แผนกผู้ขอ', 'สถานที่', 'วัตถุประสงค์', 'สถานะ',
-          'ยอดขอเบิก', 'ยอดใช้จริง', 'จ่ายแล้วรวม (ตามประวัติ)', 'จ่ายส่วนต่างแล้ว', 'คืนแล้ว (ปิดงาน)', 'ต้องคืน (ยังไม่ปิด)', 'ต้องจ่ายเพิ่ม', 'เจ้าหน้าที่บัญชี', 'อัปเดตล่าสุด', 'หัวหน้าผู้ขอ', 'ผู้จัดการบัญชี', 'CFO', 'ผู้บริหารตามสาย (เดิม)'),
-         (20, 14, 22, 30, 26, 18, 20, 38, 28, 18, 18, 23, 20, 22, 22, 20, 26, 22, 26, 26, 26, 26),
+          'ยอดขอเบิก', 'ยอดใช้จริง', 'จ่ายแล้วรวม (ตามประวัติ)', 'จ่ายส่วนต่างแล้ว', 'คืนแล้ว (ปิดงาน)', 'ต้องคืน (ยังไม่ปิด)', 'ต้องจ่ายเพิ่ม', 'เจ้าหน้าที่บัญชี', 'อัปเดตล่าสุด', 'หัวหน้าผู้ขอ', 'ผู้จัดการบัญชี', 'CFO'),
+         (20, 14, 22, 30, 26, 18, 20, 38, 28, 18, 18, 23, 20, 22, 22, 20, 26, 22, 26, 26, 26),
          '1 แถวต่อคำขอ • ยอดว่าง = ยังไม่ทราบ • จ่ายส่วนต่างรวมอยู่ในจ่ายแล้วรวม ห้ามบวกซ้ำ • เงินคืน/ต้องจ่ายเพิ่มคำนวณจากประวัติจ่ายที่มี'),
         ('รายการค่าใช้จ่าย', 'ExpenseItems',
          ('เลขที่เอกสาร', 'วันที่ขอ', 'ค่าใช้จ่ายของเดือน', 'ผู้ขอ', 'ลำดับ', 'รายการ', 'BU', 'แผนก Budget', 'Budget', 'ยอดขอรายการ', 'ยอดใช้จริงรายการ', 'ผู้อนุมัติ Budget', 'สถานะคำขอ'),
@@ -75,7 +75,7 @@ def build_claim_report(claims, filters):
             claim.requested_total, claim.actual_total, paid, extra,
             refund if closed else None, refund if not closed else None, due,
             person(claim.accountant), timezone.localtime(claim.updated_at).replace(tzinfo=None),
-            person(claim.supervisor), person(claim.accounting_manager), person(claim.cfo), person(claim.executive),
+            person(claim.supervisor), person(claim.accounting_manager), person(claim.cfo),
         ))
         for index, item in enumerate(claim.items.all(), 1):
             append_text_safe(items_sheet, (

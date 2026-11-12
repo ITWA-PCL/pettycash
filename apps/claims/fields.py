@@ -11,7 +11,7 @@ class ThaiMonthWidget(forms.TextInput):
         return value.strftime('%Y-%m') if isinstance(value, date) else (value or '')
 
     def render(self, name, value, attrs=None, renderer=None):
-        attrs = dict(attrs or {})
+        attrs = self.build_attrs(self.attrs, attrs)
         field_id = attrs.get('id', 'id_' + name)
         value = self.format_value(value)
         try:

@@ -18,7 +18,7 @@ from apps.accounts.roles import ACCOUNTANT, SUPERVISOR_APPROVER, ROLE_NAMES
 from apps.core.system_settings import get_system_settings
 from .forms import ClaimRequestForm
 from .models import ClaimApproval, ClaimDocumentSequence, ClaimPayment, ClaimRequest
-from .policies import backdate_error
+from .policies import earliest_expense_month, expense_month_error
 from .telegram_totals import daily_approval_breakdown
 from .views import assign_document_number
 
@@ -76,24 +76,31 @@ class DemoRequirementsTests(TestCase):
     def pay_record(self, claim, amount, kind=ClaimPayment.Kind.INITIAL):
         return claim.payments.create(kind=kind, method='CASH', amount=Decimal(amount), paid_by=self.accountant)
 
-    def test_five_days_inclusive_and_future_expense_month_independent(self):
+    def test_month_deadline_inclusive_and_request_date_independent(self):
         form = self.form('31/10/2026')
         self.assertTrue(form.is_valid(), form.errors)
         saved = form.save()
         self.assertEqual(saved.expense_month, date(2027, 1, 1))
         self.assertEqual(saved.request_date, date(2026, 10, 31))
-        old = self.form('30/10/2026')
+        old = self.form('01/10/2026', expense_month='2026-10')
+        self.assertTrue(old.is_valid(), old.errors)
+        self.assertIn('data-min-month="2026-10"', str(old['expense_month']))
+        self.clock.return_value = date(2026, 11, 6)
+        old = self.form('06/11/2026', expense_month='2026-10')
         self.assertFalse(old.is_valid())
-        self.assertIn('request_date', old.errors)
+        self.assertIn('expense_month', old.errors)
+        self.assertIn('data-min-month="2026-11"', str(old['expense_month']))
+        self.assertTrue(self.form('01/11/2026', expense_month='2026-11').is_valid())
 
     def test_saved_old_draft_cannot_bypass_five_day_submission_check(self):
-        claim = self.claim(request_date=date(2026, 10, 30))
+        claim = self.claim(request_date=date(2026, 10, 30), expense_month=date(2026, 10, 1))
+        self.clock.return_value = date(2026, 11, 6)
         self.submit(claim)
         self.assertEqual(claim.status, 'DRAFT')
         self.assertIsNone(claim.document_number)
         self.assertFalse(claim.approval_records.exists())
 
-    def test_returned_after_deadline_can_resubmit_only_same_previously_valid_date(self):
+    def test_returned_request_dates_no_longer_have_rolling_five_day_limit(self):
         claim = self.claim(request_date=date(2026, 10, 31))
         self.submit(claim)
         self.assertEqual(claim.accepted_request_date, date(2026, 10, 31))
@@ -105,11 +112,23 @@ class DemoRequirementsTests(TestCase):
         claim.refresh_from_db()
         self.clock.return_value = date(2026, 11, 20)
         self.assertTrue(self.form('31/10/2026', instance=claim).is_valid())
-        self.assertFalse(self.form('30/10/2026', instance=claim).is_valid())
+        self.assertTrue(self.form('30/10/2026', instance=claim).is_valid())
         claim.refresh_from_db()
         self.submit(claim)
         self.assertEqual(claim.status, 'PENDING_SUPERVISOR')
         self.assertEqual(claim.document_number, old_number)
+
+    def test_month_cutoff_across_year_and_leap_year(self):
+        for today, minimum in ((date(2027, 1, 5), date(2026, 12, 1)),
+                               (date(2027, 1, 6), date(2027, 1, 1)),
+                               (date(2028, 3, 5), date(2028, 2, 1)),
+                               (date(2028, 3, 6), date(2028, 3, 1)),
+                               (date(2026, 11, 30), date(2026, 11, 1))):
+            with self.subTest(today=today):
+                self.clock.return_value = today
+                self.assertEqual(earliest_expense_month(), minimum)
+                self.assertEqual(expense_month_error(minimum), '')
+                self.assertTrue(expense_month_error((minimum - timedelta(days=1)).replace(day=1)))
 
     def test_new_location_other_rejected_but_legacy_detail_kept(self):
         form = self.form('05/11/2026', work_location='OTHER', branch_name='Legacy place')

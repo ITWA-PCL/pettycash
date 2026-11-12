@@ -378,6 +378,21 @@ def configure_telegram_webhook(request):
 
 
 @login_required
+@never_cache
+def system_web_health(request):
+    if not can_manage_users(request.user):
+        return HttpResponseForbidden('สำหรับผู้ดูแลระบบเท่านั้น')
+    if request.method != 'GET':
+        return JsonResponse({'detail': 'Method not allowed'}, status=405)
+    try:
+        connection.ensure_connection()
+        database_ok = connection.is_usable()
+    except Exception:
+        database_ok = False
+    return JsonResponse({**get_web_health(), 'database_ok': database_ok})
+
+
+@login_required
 def system_overview(request):
     """Read-only operational monitor for Super Admins."""
     if not can_manage_users(request.user):

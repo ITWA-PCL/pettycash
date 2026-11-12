@@ -1,0 +1,12 @@
+<div class="monitor-web-health" data-web-health data-refresh-url="{% url 'system_web_health' %}">
+  <div class="monitor-web-health-head"><span>WEB HEALTH</span><b class="{% if web_health.running %}is-on{% else %}is-off{% endif %}"><i></i>{% if web_health.running %}ออนไลน์{% else %}ไม่พร้อมใช้งาน{% endif %}</b></div>
+  <div class="monitor-web-stat">
+    <div><span>CPU (Web container)</span><strong data-health-cpu>{% if web_health.cpu_percent is not None %}{{ web_health.cpu_percent }}%{% else %}กำลังวัด{% endif %}</strong></div>
+    <div class="monitor-progress" data-health-cpu-progress aria-label="CPU usage"><i data-health-cpu-bar style="width:{% if web_health.cpu_percent is not None %}{{ web_health.cpu_percent }}{% else %}0{% endif %}%"></i></div>
+  </div>
+  <div class="monitor-web-stat">
+    <div><span>Memory</span><strong data-health-memory>{{ web_health.memory_current }}</strong><small data-health-memory-limit>จาก {{ web_health.memory_limit }}</small></div>
+    <div class="monitor-progress memory" data-health-memory-progress aria-label="Memory usage"><i data-health-memory-bar style="width:{{ web_health.memory_bar_percent }}%"></i></div>
+  </div>
+  <div class="monitor-web-db"><span>Database</span><b data-health-db class="{% if database_ok %}is-on{% else %}is-off{% endif %}">{% if database_ok %}เชื่อมต่อแล้ว{% else %}ตรวจสอบไม่ได้{% endif %}</b></div>
+</div>
