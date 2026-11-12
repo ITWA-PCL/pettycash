@@ -2,6 +2,8 @@
 
 ## ปิดงาน 12 พฤศจิกายน 2026 — อนุมัติส่ง Git
 
+- ส่งโค้ดสำเร็จ commit 794dfbd ขึ้น origin/process-flow เปิด PR #5: https://github.com/ITWA-PCL/pettycash/pull/5 (รอเจ้าของตรวจ/อนุมัติ) ไม่มีไฟล์งานค้างนอก commit หลังส่ง บันทึกเลข PR เพิ่มเป็น commit เอกสารแยก
+
 - ผู้ใช้อนุมัติ push งานค้างทั้งหมดวันนี้: Web Health อัปเดตเอง, กฎเดือนค่าใช้จ่ายสิ้นเดือน + 5 วันพร้อมเตือน, ส่วนลงนามข้อความรอบสุดท้ายและ CFO เฉพาะอนุมัติจริง, ลบผู้บริหารตามสายเดิมจาก Excel รวมการแก้แยกผู้อนุมัติ Budget ชื่อซ้ำ
 - ตรวจ GitHub จริงก่อนส่ง: PR #4 merge แล้ว main เป็น b6307ee และเนื้อหาเหมือนฐาน local a57b050 จึง fast-forward ฐาน process-flow ไปที่ merge commit ก่อนส่งงานใหม่ ไม่ได้ merge/deploy งานรอบนี้
 - ผลตรวจล่าสุด 358 tests ผ่านใน PostgreSQL ฐานทดสอบแยก, Chromium ปฏิทิน/ลงนาม/Web Health ผ่าน, ตรวจ model ไม่มี migration เพิ่ม, diff ไม่มี whitespace error ไม่รวม .env/ข้อมูลผู้ใช้/ไฟล์แนบ/ไฟล์ export/ภาพตัวอย่างใน commit

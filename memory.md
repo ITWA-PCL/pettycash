@@ -2,6 +2,8 @@
 
 ## ปิดงาน 12 พฤศจิกายน 2026 — ผู้ใช้อนุมัติ push
 
+- โค้ดส่งแล้ว commit 794dfbd บน process-flow; PR #5 https://github.com/ITWA-PCL/pettycash/pull/5 รอเจ้าของตรวจ ไม่ merge/deploy บันทึกสถานะส่งจริงเพิ่มเป็น commit เอกสาร
+
 - อนุมัติส่งงาน 4 เรื่องที่ค้าง: Web Health/เดือนค่าใช้จ่าย/ลงนามแบบข้อความ final/ตัดคอลัมน์ผู้บริหารเดิม Excel รวมแก้ชื่อผู้อนุมัติ Budget ซ้ำ 358 tests + Chromium ผ่าน ไม่มี migration ใหม่ อัปเดตฐานจาก PR#4 ที่ merge แล้ว (main b6307ee เนื้อหาเหมือน a57b050) ส่ง process-flow และเปิด PR ใหม่ ไม่ merge/deploy/เปลี่ยน Webhook
 
 ## 12 พฤศจิกายน 2026 — เปลี่ยนกฎย้อนหลังเป็นเดือนค่าใช้จ่าย
