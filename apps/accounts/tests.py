@@ -124,12 +124,12 @@ class UserModelTests(TestCase):
         self.client.force_login(user)
 
         response = self.client.post(reverse("signature_setup"), {
-            "action": "password", "password": "new-safe-password-2026",
+            "action": "password", "password": "New-SafePass26!",
         })
 
         self.assertRedirects(response, reverse("signature_setup"))
         user.refresh_from_db()
-        self.assertTrue(user.check_password("new-safe-password-2026"))
+        self.assertTrue(user.check_password("New-SafePass26!"))
 
     def test_ad_user_does_not_see_password_change_form(self):
         user = User.objects.create_user(username="ad-profile-user", password="safe-test-password", is_ad_auth=True)

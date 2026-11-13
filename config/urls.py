@@ -4,9 +4,19 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from apps.accounts.views import login_view, signature_setup, telegram_test_message, theme_preference, user_create, user_delete, user_edit, user_list, user_toggle_active
+from apps.accounts.views import (
+    forced_password_change, login_view, logout_view, signature_image, signature_setup,
+    sso_authorize_url_view, sso_break_glass_toggle, sso_callback_view, sso_config_view,
+    sso_login_redirect, sso_start_view, telegram_test_message, theme_preference,
+    user_create, user_delete, user_edit, user_list, user_toggle_active,
+)
 from apps.claims.views import claim_amount_correct, approval_queue, claim_approval_action, claim_attachment_delete, claim_attachment_download, claim_attachment_preview, claim_cancel_after_refund, claim_cfo_acknowledge, claim_clearance_correct, claim_clearance_submit, claim_complete, claim_create, claim_delete, claim_detail, claim_edit, claim_export, claim_list, claim_payment, claim_payment_slip_download, claim_payment_slip_preview, claim_print, claim_receipt_confirm, claim_submit, telegram_webhook
-from apps.core.views import admin_operations, budget_delete, budget_settings, business_unit_delete, dashboard, dashboard_claim_tracker, mark_notifications_read, notification_feed, notification_open, system_overview, system_settings
+from apps.core.views import (
+    admin_operations, budget_delete, budget_settings, business_unit_delete,
+    ciam_settings_api, ciam_sync_now, ciam_test_connection,
+    dashboard, dashboard_claim_tracker, mark_notifications_read,
+    notification_feed, notification_open, system_overview, system_settings,
+)
 from apps.claims.views import claim_reference_attachment
 from apps.core.views import configure_telegram_webhook
 from apps.core.master_import import budget_import, budget_import_template
@@ -24,7 +34,18 @@ urlpatterns = [
     path("notifications/<int:notification_id>/open/", notification_open, name="notification_open"),
     path("notifications/feed/", notification_feed, name="notification_feed"),
     path("login/", login_view, name="login"),
-    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("logout/", logout_view, name="logout"),
+    path("profile/password/change/", forced_password_change, name="forced_password_change"),
+    path("auth/sso/login/", sso_login_redirect, name="sso_login_redirect"),
+    path("auth/sso/callback/", sso_callback_view, name="sso_callback"),
+    path("auth/start/", sso_start_view, name="sso_start"),
+    path("api/auth/sso/config/", sso_config_view, name="sso_config"),
+    path("api/auth/sso/authorize-url/", sso_authorize_url_view, name="sso_authorize_url"),
+    path("api/auth/sso/callback/", sso_callback_view, name="sso_callback_api"),
+    path("api/auth/sso/break-glass-toggle/", sso_break_glass_toggle, name="sso_break_glass_toggle"),
+    path("api/settings/ciam-sso/", ciam_settings_api, name="ciam_settings_api"),
+    path("api/settings/ciam-sso/test-connection/", ciam_test_connection, name="ciam_test_connection"),
+    path("api/settings/ciam-agent/sync-now/", ciam_sync_now, name="ciam_sync_now"),
     path("profile/theme/", theme_preference, name="theme_preference"),
     path("profile/signature/", signature_setup, name="signature_setup"),
     path('profile/signature/image/', signature_image, name='signature_image'),

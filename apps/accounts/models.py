@@ -62,12 +62,38 @@ class User(AbstractUser):
     telegram_notifications_enabled = models.BooleanField(default=False)
     signature = models.FileField(upload_to=signature_upload_path, blank=True)
     signature_updated_at = models.DateTimeField(null=True, blank=True)
+    password_changed_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่เปลี่ยนรหัสผ่านล่าสุด")
+    must_change_password = models.BooleanField(default=False, verbose_name="ต้องเปลี่ยนรหัสผ่านในการเข้าใช้งานครั้งถัดไป")
     onboarding_completed = models.BooleanField(default=False)
+    ciam_sub = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name="Central IAM Subject Identifier",
+    )
     theme_preference = models.CharField(
         max_length=10,
         choices=ThemePreference.choices,
         default=ThemePreference.LIGHT,
     )
+
+    @property
+    def is_local_account(self) -> bool:
+        """True if this account manages its password locally, not via AD or external SSO."""
+        return not self.is_ad_auth and self.auth_source != self.AuthSource.AD
+
+    def check_password_expired(self) -> tuple[bool, int]:
+        """
+        Check 90-day password rotation policy for local accounts only.
+        Returns (is_expired: bool, days_left: int). AD accounts always return (False, 90).
+        """
+        if not self.is_local_account:
+            return False, 90
+        if self.must_change_password:
+            return True, 0
+        from .password_policy import is_password_expired
+        return is_password_expired(self.password_changed_at, self.date_joined)
 
     @property
     def has_signature(self) -> bool:

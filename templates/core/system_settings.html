@@ -41,11 +41,99 @@
     <div class="settings-webhook-connect"><div><strong>เชื่อมต่อปุ่มตอบกลับ</strong><small>บันทึกค่าก่อน แล้วกดเชื่อมต่อ Webhook กับเว็บนี้</small>{% if webhook_url %}<small class="webhook-address">{{ webhook_url }}</small>{% endif %}</div><button class="button button-secondary button-compact" type="submit" form="telegram-webhook-form">เชื่อมต่อ Webhook</button></div>
     <button class="button button-primary button-compact settings-save" type="submit">บันทึกการตั้งค่า</button>
   </section>
+  <section class="card user-form-card settings-connection-card" id="settings-ciam">
+    <div class="settings-section-heading">
+      <div>
+        <h2>4. เชื่อมต่อ Central IAM (Single Sign-On & ISO 27001)</h2>
+        <p class="muted">เชื่อมต่อระบบพิสูจน์ตัวตนกลาง Window Asia Central IAM ผ่าน OIDC / PKCE S256</p>
+      </div>
+      <span class="settings-config-status {% if form.instance.ciam_sso_enabled %}is-ready{% endif %}">
+        {% if form.instance.ciam_sso_enabled %}เปิดใช้งาน SSO{% else %}ปิดใช้งาน SSO{% endif %}
+      </span>
+    </div>
+    <div class="form-grid">
+      {% include 'core/_setting_field.html' with field=form.ciam_base_url %}
+      {% include 'core/_setting_field.html' with field=form.ciam_client_id %}
+      {% include 'core/_setting_field.html' with field=form.ciam_client_secret %}
+    </div>
+    <div class="form-grid" style="margin-top: 0.75rem;">
+      {% include 'core/_setting_field.html' with field=form.ciam_auto_provision_group %}
+    </div>
+    <div class="setting-row">
+      <div>
+        <strong>เปิดใช้งาน Central IAM Single Sign-On (SSO)</strong>
+        <small>เมื่อเปิด จะแสดงปุ่มล็อกอินด้วย SSO บนหน้า Login ให้พนักงานเข้าใช้งานได้อย่างราบรื่น</small>
+      </div>
+      <label class="switch-control" for="{{ form.ciam_sso_enabled.id_for_label }}">
+        {{ form.ciam_sso_enabled }}
+        <span class="switch-slider" aria-hidden="true"></span>
+        <span class="sr-only">{{ form.ciam_sso_enabled.label }}</span>
+      </label>
+    </div>
+    <div class="setting-row" style="background: rgba(245, 158, 11, 0.08); padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.25);">
+      <div>
+        <strong style="color: #d97706;">⚠️ โหมดฉุกเฉิน Break-Glass (Emergency Mode)</strong>
+        <small>เมื่อเปิด จะระงับ SSO ชั่วคราว และบังคับให้พนักงานล็อกอินด้วยรหัสผ่านตรงผ่าน AD Gateway หรือ Local Admin</small>
+      </div>
+      <label class="switch-control" for="{{ form.ciam_break_glass_active.id_for_label }}">
+        {{ form.ciam_break_glass_active }}
+        <span class="switch-slider" aria-hidden="true"></span>
+        <span class="sr-only">{{ form.ciam_break_glass_active.label }}</span>
+      </label>
+    </div>
+    <div style="display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; align-items: center;">
+      <button class="button button-secondary button-compact" type="button" id="btnTestCiam">
+        ⚡ ทดสอบการเชื่อมต่อไปยัง Central IAM
+      </button>
+      <button class="button button-secondary button-compact" type="submit" form="ciam-sync-form" title="ส่งข้อมูลและดึงคำสั่งจาก Central IAM ทันที">
+        ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที (Mode C)
+      </button>
+      <span id="ciamTestResult" style="font-size: 0.8rem; font-weight: 600;"></span>
+    </div>
+    <div style="margin-top: 1.25rem;">
+      <button class="button button-primary button-compact settings-save" type="submit">บันทึกการตั้งค่า</button>
+    </div>
+  </section>
 </form>
+<form id="ciam-sync-form" method="post" action="{% url 'ciam_sync_now' %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'system_settings' %}"></form>
 <details class="card user-form-card settings-advanced"><summary><strong>ตั้งค่าขั้นสูงสำหรับผู้ดูแล VPS</strong><span>PostgreSQL, Redis, Secret Key และเครือข่าย · ใช้ค่าปัจจุบันได้ ไม่ต้องกรอกซ้ำ</span></summary><div><p class="muted">แก้เฉพาะเมื่อผู้ดูแล VPS ต้องเปลี่ยนค่าของเซิร์ฟเวอร์</p><a class="button button-secondary button-compact" href="{% url 'server_configuration' %}">จัดการค่าตั้งต้นเซิร์ฟเวอร์</a></div></details>
 <form id="telegram-webhook-form" method="post" action="{% url 'configure_telegram_webhook' %}" data-confirm="ยืนยันย้ายการรับปุ่มของ Bot มาเว็บนี้? Bot เดียวจะรับ Webhook ที่เว็บนี้แทนที่อยู่เดิม">{% csrf_token %}</form>
 <dialog class="telegram-bot-dialog" id="telegram-bot-dialog" aria-labelledby="telegram-bot-title"><div class="telegram-bot-dialog-content"><button class="telegram-bot-close" type="button" data-telegram-bot-close aria-label="ปิด">×</button><img class="telegram-bot-icon" src="{% static 'img/telegram-logo.svg' %}" alt=""><span class="eyebrow">TELEGRAM NOTIFICATION</span><h2 id="telegram-bot-title">เพิ่ม Petty Cash Bot</h2><p>สแกน QR Code ด้วย Telegram เพื่อเปิดบอต และกด <strong>Start</strong> ก่อนใช้งานการแจ้งเตือน</p><img src="{% static 'img/telegram-bot-qr.png' %}" alt="QR Code สำหรับเพิ่ม @WINDOWASIA_PETTYCASH_BOT" width="320" height="320"><strong class="telegram-bot-handle">@WINDOWASIA_PETTYCASH_BOT</strong><a class="button button-primary button-compact" href="https://t.me/WINDOWASIA_PETTYCASH_BOT" target="_blank" rel="noopener">เปิดใน Telegram ↗</a></div></dialog>
 <script>
-  (() => { const dialog = document.getElementById('telegram-bot-dialog'); const open = document.getElementById('telegram-bot-open'); if (!dialog || !open) return; open.addEventListener('click', () => dialog.showModal()); dialog.querySelector('[data-telegram-bot-close]').addEventListener('click', () => dialog.close()); dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); }); })();
+  (() => {
+    const dialog = document.getElementById('telegram-bot-dialog');
+    const open = document.getElementById('telegram-bot-open');
+    if (dialog && open) {
+      open.addEventListener('click', () => dialog.showModal());
+      dialog.querySelector('[data-telegram-bot-close]').addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+    }
+
+    const btnTestCiam = document.getElementById('btnTestCiam');
+    const ciamTestResult = document.getElementById('ciamTestResult');
+    if (btnTestCiam && ciamTestResult) {
+      btnTestCiam.addEventListener('click', async () => {
+        ciamTestResult.style.color = '#2563eb';
+        ciamTestResult.textContent = 'กำลังทดสอบการเชื่อมต่อไปยัง Central IAM...';
+        try {
+          const res = await fetch("{% url 'ciam_test_connection' %}", {
+            method: "POST",
+            headers: { "X-CSRFToken": "{{ csrf_token }}" }
+          });
+          const data = await res.json();
+          if (data.status === 'connected') {
+            ciamTestResult.style.color = '#059669';
+            ciamTestResult.textContent = `✓ เชื่อมต่อสำเร็จ (${data.latency_ms}ms) · คีย์ ID: ${data.key_id}`;
+          } else {
+            ciamTestResult.style.color = '#e11d48';
+            ciamTestResult.textContent = `✗ ${data.message} (${data.latency_ms || 0}ms)`;
+          }
+        } catch (err) {
+          ciamTestResult.style.color = '#e11d48';
+          ciamTestResult.textContent = `✗ ไม่สามารถเชื่อมต่อได้: ${err}`;
+        }
+      });
+    }
+  })();
 </script>
 {% endblock %}

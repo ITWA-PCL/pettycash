@@ -47,13 +47,43 @@ class BudgetForm(forms.ModelForm):
 
 class SystemSettingsForm(forms.ModelForm):
     integration_names = ('public_base_url', 'ad_gateway_url', 'ad_app_id', 'ad_secret_key', 'ad_origin_ip',
-                         'telegram_bot_token', 'telegram_group_chat_id', 'telegram_webhook_secret')
+                         'telegram_bot_token', 'telegram_group_chat_id', 'telegram_webhook_secret',
+                         'ciam_base_url', 'ciam_client_id', 'ciam_client_secret', 'ciam_auto_provision_group')
 
     class Meta:
         model = SystemSettings
-        fields = ("company_name", "head_office_document_prefix", "branch_document_prefix", "executive_approval_threshold", "cfo", "max_attachment_count", "max_attachment_size_mb", "daily_reminder_time", "log_retention_days", "require_signature_on_first_login", "claim_print_enabled", "auto_receive_enabled", "auto_receive_after_days", "petty_receive_after_days", "telegram_enabled", "ad_gateway_url", "ad_app_id", "ad_secret_key", "ad_origin_ip", "ad_enabled", "ciam_enabled", "maintenance_mode", "maintenance_message")
-        labels = {"company_name": "ชื่อบริษัทในเอกสาร", "document_number_prefix": "Prefix เลขที่เอกสาร", "executive_approval_threshold": "ยอดเบิกที่ต้องให้ CFO อนุมัติ (บาท)", "cfo": "CFO ผู้รับทราบและอนุมัติ", "max_attachment_count": "จำนวนไฟล์แนบสูงสุดต่อคำขอ", "max_attachment_size_mb": "ขนาดไฟล์แนบสูงสุดต่อไฟล์ (MB)", "daily_reminder_time": "เวลาแจ้งเตือนงานค้างรายวัน", "log_retention_days": "ระยะเวลาเก็บ Log (วัน)", "require_signature_on_first_login": "บังคับเพิ่มลายเซ็นก่อนใช้งานครั้งแรก", "claim_print_enabled": "เปิดใช้งานเอกสารสำหรับพิมพ์", "auto_receive_enabled": "ถือว่ารับเงินอัตโนมัติเมื่อครบกำหนด", "auto_receive_after_days": "เบิกยืมเงิน: รอกดยืนยันรับเงิน (วัน)", "petty_receive_after_days": "เบิกเงินสดย่อย: รอกดยืนยันรับเงิน (วัน)", "ciam_enabled": "เปิดใช้งาน CIAM", "maintenance_mode": "เปิดโหมดปรับปรุงระบบ", "maintenance_message": "ข้อความแจ้งผู้ใช้งาน"}
-        widgets = {"ad_secret_key": forms.PasswordInput(render_value=False), "daily_reminder_time": forms.TimeInput(format="%H:%M", attrs={"type": "time"}), "auto_receive_after_days": forms.NumberInput(attrs={"min": "1", "max": "365", "step": "1"}), "petty_receive_after_days": forms.NumberInput(attrs={"min": "1", "max": "365", "step": "1"})}
+        fields = (
+            "company_name", "head_office_document_prefix", "branch_document_prefix",
+            "executive_approval_threshold", "cfo", "max_attachment_count", "max_attachment_size_mb",
+            "daily_reminder_time", "log_retention_days", "require_signature_on_first_login",
+            "claim_print_enabled", "auto_receive_enabled", "auto_receive_after_days",
+            "petty_receive_after_days", "telegram_enabled", "ad_gateway_url", "ad_app_id",
+            "ad_secret_key", "ad_origin_ip", "ad_enabled", "ciam_enabled",
+            "ciam_base_url", "ciam_client_id", "ciam_client_secret", "ciam_sso_enabled",
+            "ciam_break_glass_active", "ciam_auto_provision_group",
+            "maintenance_mode", "maintenance_message",
+        )
+        labels = {
+            "company_name": "ชื่อบริษัทในเอกสาร", "document_number_prefix": "Prefix เลขที่เอกสาร",
+            "executive_approval_threshold": "ยอดเบิกที่ต้องให้ CFO อนุมัติ (บาท)", "cfo": "CFO ผู้รับทราบและอนุมัติ",
+            "max_attachment_count": "จำนวนไฟล์แนบสูงสุดต่อคำขอ", "max_attachment_size_mb": "ขนาดไฟล์แนบสูงสุดต่อไฟล์ (MB)",
+            "daily_reminder_time": "เวลาแจ้งเตือนงานค้างรายวัน", "log_retention_days": "ระยะเวลาเก็บ Log (วัน)",
+            "require_signature_on_first_login": "บังคับเพิ่มลายเซ็นก่อนใช้งานครั้งแรก", "claim_print_enabled": "เปิดใช้งานเอกสารสำหรับพิมพ์",
+            "auto_receive_enabled": "ถือว่ารับเงินอัตโนมัติเมื่อครบกำหนด", "auto_receive_after_days": "เบิกยืมเงิน: รอกดยืนยันรับเงิน (วัน)",
+            "petty_receive_after_days": "เบิกเงินสดย่อย: รอกดยืนยันรับเงิน (วัน)", "ciam_enabled": "เปิดใช้งาน CIAM (Legacy Switch)",
+            "ciam_base_url": "Central IAM Base URL", "ciam_client_id": "OIDC Client ID",
+            "ciam_client_secret": "OIDC Client Secret", "ciam_sso_enabled": "เปิดใช้งาน Central IAM Single Sign-On (SSO)",
+            "ciam_break_glass_active": "เปิดโหมดฉุกเฉิน Break-Glass (บังคับรหัสผ่านตรง)",
+            "ciam_auto_provision_group": "กลุ่มสิทธิ์เริ่มต้นสำหรับพนักงานใหม่ (Auto-Provision)",
+            "maintenance_mode": "เปิดโหมดปรับปรุงระบบ", "maintenance_message": "ข้อความแจ้งผู้ใช้งาน",
+        }
+        widgets = {
+            "ad_secret_key": forms.PasswordInput(render_value=False),
+            "ciam_client_secret": forms.PasswordInput(render_value=False),
+            "daily_reminder_time": forms.TimeInput(format="%H:%M", attrs={"type": "time"}),
+            "auto_receive_after_days": forms.NumberInput(attrs={"min": "1", "max": "365", "step": "1"}),
+            "petty_receive_after_days": forms.NumberInput(attrs={"min": "1", "max": "365", "step": "1"}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -73,7 +103,7 @@ class SystemSettingsForm(forms.ModelForm):
         self.fields['public_base_url'].required = True
         self.fields['public_base_url'].help_text = 'ใช้สร้างลิงก์ในข้อความ Telegram และที่อยู่รับปุ่มตอบกลับ'
         self.fields['telegram_group_chat_id'].help_text = 'เว้นว่างได้หากไม่ส่งข้อความเข้ากลุ่ม'
-        for name, env_name in (('ad_secret_key', 'AD_SECRET_KEY'), ('telegram_bot_token', 'TELEGRAM_BOT_TOKEN'), ('telegram_webhook_secret', 'TELEGRAM_WEBHOOK_SECRET')):
+        for name, env_name in (('ad_secret_key', 'AD_SECRET_KEY'), ('telegram_bot_token', 'TELEGRAM_BOT_TOKEN'), ('telegram_webhook_secret', 'TELEGRAM_WEBHOOK_SECRET'), ('ciam_client_secret', 'CIAM_CLIENT_SECRET')):
             self.fields[name].required = False
             self.fields[name].widget = forms.PasswordInput(render_value=False, attrs={'autocomplete': 'new-password'})
             configured = bool(getattr(self.instance, name) or getattr(settings, env_name, ''))
