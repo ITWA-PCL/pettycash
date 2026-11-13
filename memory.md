@@ -1,5 +1,20 @@
 # บันทึกโครงการ: Petty Cash
 
+## 13 พฤศจิกายน 2026 — รวมโค้ด main เข้ากับ Sec1 และแก้ Conflict ทั้ง 7 ไฟล์
+
+- **1. ตรวจสอบและผสานการทำงานระหว่าง main กับ Sec1:**
+  - `apps/accounts/views.py`: คงการ redirect ผู้ใช้ที่ล็อกอินแล้ว และ bounce คำขอที่มี code/state ไปยัง SSO callback เพื่อไม่ให้ค้างหน้าล็อกอิน
+  - `apps/core/forms.py`: รองรับ `ciam_m2m_key`, จัดการ PasswordInput masking และเก็บรักษา Secret เดิมเมื่อเว้นว่าง, ถอด `ciam_enabled` เก่าที่ไม่จำเป็นออก
+  - `apps/core/views.py`: รองรับ `ciam_m2m_key_masked` ใน GET และบันทึก `ciam_m2m_key` ใน PUT/POST API
+  - `config/urls.py`: เพิ่ม routing รองรับ `/auth/callback/`, `/auth/start` (ทั้งแบบมีและไม่มี trailing slash) และ Two-Way Directory API `/api/v1/directory/accounts/`
+  - `templates/core/system_settings.html`: จัดกลุ่มตั้งค่า Central IAM ออกเป็น 2 ส่วนชัดเจน (Single Sign-On และ M2M Management API) บันทึกรวมในฟอร์มเดียว พร้อมแสดง URL แนะนำสำหรับนำไปกรอกบนหน้าจอ CIAM
+  - `templates/registration/login.html`: ปรับให้มีปุ่ม SSO ที่ด้านบนเพียงตำแหน่งเดียว แสดงผลได้เต็มรูปแบบและ Responsive ทั้งบน Desktop และ Mobile โดยตัดปุ่มล่างซ้ำซ้อนออก
+  - `apps/accounts/tests_security_ciam.py`: รวมเทส `test_ciam_directory_accounts_m2m_api` และ `test_sso_callback_route_alias` ทดสอบผ่านครบทั้ง 32/32 tests
+- **2. ผลการทดสอบ & การส่งงาน:**
+  - รันเทสความปลอดภัย CIAM: 32 tests ผ่าน 100%
+  - รันเทส accounts ทั้งหมด: 64 tests ผ่าน 100%
+  - ดำเนินการตาม SOP: ตรวจสอบ `git status` อยู่บน branch `Sec1`, ไม่มีไฟล์ credential / database ปนเปื้อน, สร้าง commit รวม merge และ Push ขึ้น GitHub เฉพาะ branch `Sec1` สำเร็จเรียบร้อย
+
 ## 13 พฤศจิกายน 2026 — แก้ไขตามผลตรวจ GitHub PR #7 (Sec1 -> main)
 
 - **1. แก้ไข CI Dependencies:**
