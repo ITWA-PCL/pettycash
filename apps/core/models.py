@@ -47,6 +47,14 @@ class SystemSettings(models.Model):
     ad_origin_ip = models.GenericIPAddressField(blank=True, null=True)
     ad_enabled = models.BooleanField(default=True)
     ciam_enabled = models.BooleanField(default=False)
+    ciam_base_url = models.URLField(default="https://ciam.windowasia.com", blank=True)
+    ciam_client_id = models.CharField(max_length=150, default="pettycash-spoke-client", blank=True)
+    ciam_client_secret = SecretTextField(blank=True)
+    ciam_sso_enabled = models.BooleanField(default=False)
+    ciam_break_glass_active = models.BooleanField(default=False)
+    ciam_auto_provision_group = models.CharField(max_length=100, default="ผู้ขอเบิก", blank=True)
+    ciam_session_ttl_minutes = models.PositiveIntegerField(default=480)
+    ciam_m2m_key = SecretTextField(blank=True)
     maintenance_mode = models.BooleanField(default=False)
     maintenance_message = models.CharField(max_length=255, default="กำลังปรับปรุงระบบเพื่อให้ใช้งานได้ดียิ่งขึ้น")
     updated_at = models.DateTimeField(auto_now=True)
@@ -139,3 +147,29 @@ class AdminAuditLog(models.Model):
     @property
     def label(self):
         return AUDIT_ACTION_LABELS.get(self.action, self.action.replace("_", " ").title())
+
+
+class TransactionLog(models.Model):
+    """
+    ISO 27001 Security Audit Trail (v2.12.0 Section 2.2).
+    Standardized cross-application audit logging format.
+    """
+    category = models.CharField(max_length=50)  # 'ciam_sso', 'security_break_glass', 'system_setting', 'password_policy'
+    action = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, default="success")  # 'success', 'failed', 'warning', 'info'
+    message = models.CharField(max_length=500)
+    details = models.TextField(blank=True, null=True)  # JSON String
+    records_count = models.IntegerField(default=0)
+    duration_ms = models.IntegerField(default=0)
+    triggered_by = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("category",), name="trans_log_cat_idx"),
+            models.Index(fields=("-created_at",), name="trans_log_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"[{self.category}] {self.action} ({self.status}) - {self.triggered_by}"
