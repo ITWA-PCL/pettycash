@@ -38,9 +38,10 @@ class PrivateSignatureTests(TestCase):
             self.assertEqual(response['Cache-Control'], 'private, no-store')
             self.assertEqual(b''.join(response.streaming_content), b'private-signature')
 
-    def test_print_and_profile_use_protected_urls(self):
+    def test_print_omits_images_and_profile_uses_protected_url(self):
         page = self.client.get(reverse('claim_print', args=[self.claim.pk]))
-        self.assertContains(page, self.image_url())
+        self.assertNotContains(page, self.image_url())
+        self.assertNotContains(page, '<img')
         self.assertNotContains(page, self.user.signature.url)
         page = self.client.get(reverse('signature_setup'))
         self.assertContains(page, reverse('signature_image'))

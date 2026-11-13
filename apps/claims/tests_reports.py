@@ -52,7 +52,7 @@ class OrganizedReportTests(TestCase):
         self.assertEqual(summary['L6'].value, 100)
         self.assertEqual(summary['N6'].value, 20)
         self.assertEqual(summary['J8'].value, '=SUBTOTAL(109,J6:J6)')
-        self.assertEqual(summary.auto_filter.ref, 'A5:V6')
+        self.assertEqual(summary.auto_filter.ref, 'A5:U6')
         items = book['รายการค่าใช้จ่าย']
         self.assertEqual(items['J6'].value + items['J7'].value, 100)
         self.assertEqual(items['K6'].value + items['K7'].value, 80)

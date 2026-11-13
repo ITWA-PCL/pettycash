@@ -10,14 +10,13 @@ from apps.core.models import Budget, BusinessUnit
 
 from .models import ClaimItem, ClaimRequest
 from .fields import ThaiMonthField
-from .policies import backdate_error, current_date
-from datetime import timedelta
+from .policies import earliest_expense_month, expense_month_error
 
 
 class ClaimRequestForm(forms.ModelForm):
     expense_month = ThaiMonthField(
         label="ค่าใช้จ่ายของเดือน", required=True,
-        help_text="เลือกเดือนและปีของค่าใช้จ่ายจากปฏิทิน แยกจากวันที่ขอเบิก",
+        help_text="เดือนปัจจุบันเลือกได้ตลอดเดือน เดือนก่อนหน้าเลือกได้ถึงวันที่ 5 ของเดือนถัดไป และเลือกเดือนล่วงหน้าได้",
     )
     class Meta:
         model = ClaimRequest
@@ -32,11 +31,7 @@ class ClaimRequestForm(forms.ModelForm):
     def __init__(self, *args, requester, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["request_date"].input_formats = ("%d/%m/%Y", "%d%m%Y", "%Y-%m-%d")
-        self.fields['request_date'].help_text = 'ย้อนหลังได้ไม่เกิน 5 วัน ณ วันที่ยื่น; ใบตีกลับที่เคยยื่นทันกำหนดใช้วันที่เดิมได้'
-        earliest = current_date() - timedelta(days=5)
-        if self.instance.pk and self.instance.status == ClaimRequest.Status.RETURNED and self.instance.accepted_request_date:
-            self.fields['request_date'].widget.attrs['data-accepted-date'] = self.instance.accepted_request_date.isoformat()
-        self.fields['request_date'].widget.attrs['data-min-date'] = earliest.isoformat()
+        self.fields['expense_month'].widget.attrs['data-min-month'] = earliest_expense_month().strftime('%Y-%m')
         self.requester = requester
         self.fields["request_type"].choices = [("", "เลือกประเภทการเบิก")] + list(ClaimRequest.RequestType.choices)
         self.fields["request_type"].required = True
@@ -65,9 +60,9 @@ class ClaimRequestForm(forms.ModelForm):
             raise ValidationError("ไม่สามารถเลือกตนเองเป็นผู้อนุมัติได้")
         return supervisor
 
-    def clean_request_date(self):
-        value = self.cleaned_data['request_date']
-        error = backdate_error(self.instance, value)
+    def clean_expense_month(self):
+        value = self.cleaned_data['expense_month']
+        error = expense_month_error(value)
         if error:
             raise ValidationError(error)
         return value

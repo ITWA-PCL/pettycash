@@ -4,6 +4,17 @@
     const value = root.querySelector('input[type=hidden]');
     const display = root.querySelector('.thai-month-display');
     const toggle = root.querySelector('.thai-month-open');
+    const minimumMonth = value.dataset.minMonth || '';
+    const warning = document.createElement('small');
+    warning.className = 'field-error'; warning.hidden = true;
+    warning.setAttribute('role', 'alert'); root.after(warning);
+    const message = 'เดือนค่าใช้จ่ายนี้พ้นกำหนดแล้ว สามารถเบิกย้อนหลังได้ถึงวันที่ 5 ของเดือนถัดไปเท่านั้น กรุณาเลือกเดือนค่าใช้จ่ายใหม่';
+    const validate = () => {
+      const expired = Boolean(value.value && minimumMonth && value.value < minimumMonth);
+      warning.textContent = expired ? message : ''; warning.hidden = !expired;
+      display.setCustomValidity(expired ? message : '');
+      return !expired;
+    };
     const selectedYear = () => /^\d{4}-(0[1-9]|1[0-2])$/.test(value.value) && Number(value.value.slice(0,4)) > 0
       ? Number(value.value.slice(0,4)) : new Date().getFullYear();
     let year = selectedYear();
@@ -15,9 +26,13 @@
     display.setAttribute('aria-controls', panel.id); display.setAttribute('aria-haspopup','dialog');
     const close = () => { panel.hidden=true; toggle.setAttribute('aria-expanded','false'); display.setAttribute('aria-expanded','false'); };
     const choose = month => {
-      value.value = String(year).padStart(4,'0') + '-' + String(month+1).padStart(2,'0');
+      const candidate = String(year).padStart(4,'0') + '-' + String(month+1).padStart(2,'0');
+      if (minimumMonth && candidate < minimumMonth) {
+        warning.textContent = message; warning.hidden = false; return;
+      }
+      value.value = candidate;
       display.value = months[month] + ' ' + (year+543);
-      display.setCustomValidity(''); value.dispatchEvent(new Event('change',{bubbles:true}));
+      validate(); value.dispatchEvent(new Event('change',{bubbles:true}));
       close(); display.focus();
     };
     const render = () => {
@@ -36,6 +51,9 @@
         const button=document.createElement('button'); button.type='button'; button.textContent=name;
         const selected=value.value===String(year).padStart(4,'0')+'-'+String(index+1).padStart(2,'0');
         button.classList.toggle('is-selected',selected); button.setAttribute('aria-pressed',String(selected));
+        const expired = minimumMonth && String(year).padStart(4,'0')+'-'+String(index+1).padStart(2,'0') < minimumMonth;
+        button.classList.toggle('is-expired', Boolean(expired));
+        if (expired) {button.setAttribute('aria-disabled','true');button.title=message;}
         button.addEventListener('click',()=>choose(index)); grid.append(button);
       }); panel.append(grid);
       const current=document.createElement('button'); current.type='button'; current.className='thai-month-current'; current.textContent='เดือนนี้';
@@ -51,9 +69,10 @@
     display.addEventListener('beforeinput',event=>event.preventDefault());
     display.addEventListener('paste',event=>event.preventDefault());
     display.addEventListener('keydown',event=>{if(['Enter',' ','ArrowDown'].includes(event.key)){event.preventDefault();open();}});
-    display.addEventListener('invalid',()=>display.setCustomValidity('กรุณาเลือกเดือนค่าใช้จ่าย'));
+    display.addEventListener('invalid',()=>{if(validate() && !value.value) display.setCustomValidity('กรุณาเลือกเดือนค่าใช้จ่าย');});
+    value.addEventListener('change', validate); validate();
     root.addEventListener('keydown',event=>{if(event.key==='Escape'){close();display.focus();}});
     document.addEventListener('pointerdown',event=>{if(!root.contains(event.target))close();});
-    root.closest('form')?.addEventListener('reset',()=>setTimeout(()=>{value.value=value.defaultValue;display.value=display.defaultValue;display.setCustomValidity('');close();}));
+    root.closest('form')?.addEventListener('reset',()=>setTimeout(()=>{value.value=value.defaultValue;display.value=display.defaultValue;validate();close();}));
   });
 })();

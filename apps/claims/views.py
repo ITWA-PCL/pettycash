@@ -19,7 +19,7 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 from apps.accounts.models import User
 from .forms import ClaimItemFormSet, ClaimRequestForm
 from .telegram_totals import daily_approval_breakdown, telegram_message_parts
-from .policies import backdate_error
+from .policies import expense_month_error
 from .references import can_view_references, reference_rows, exposure_snapshot
 from .models import (
     ClaimApproval, ClaimAttachment, ClaimBudgetApproval, ClaimPayment, ClaimRequest, REQUESTER_STATUS_GROUPS,
@@ -1055,7 +1055,7 @@ def claim_submit(request, claim_id):
         return HttpResponseNotAllowed(["POST"])
     claim = owned_claim_or_404(request.user, claim_id)
     if claim.status in (ClaimRequest.Status.DRAFT, ClaimRequest.Status.RETURNED):
-        error = backdate_error(claim, claim.request_date)
+        error = expense_month_error(claim.expense_month)
         if error or claim.work_location not in ('HQ', 'BRANCH'):
             messages.error(request, error or 'กรุณาแก้ไขสถานที่เป็นสำนักงานใหญ่หรือกาญจนบุรีก่อนส่ง')
             return redirect('claim_detail', claim_id=claim.pk)
@@ -1512,9 +1512,104 @@ def claim_print(request, claim_id):
         raise Http404("ปิดการใช้งานเอกสารสำหรับพิมพ์")
     if claim.status != ClaimRequest.Status.COMPLETED:
         raise Http404("พิมพ์ได้เฉพาะรายการที่เสร็จสิ้นแล้ว")
-    signers, auto_received, first_approver_is_executive = claim_print_signers(claim)
     difference = claim.requested_total - (claim.actual_total or Decimal("0.00"))
-    return render(request, "claims/claim_print.html", {"claim": claim, "signers": signers, "auto_received_at": auto_received.created_at if auto_received else None, "difference": difference, "has_excess": claim.has_excess, "settlement_amount": claim.settlement_amount, "first_approver_is_executive": first_approver_is_executive, "total_words": thai_baht_text(claim.requested_total)})
+    return render(request, "claims/claim_print.html", {"claim": claim, "final_signoffs": claim_print_final_signoffs(claim), "difference": difference, "has_excess": claim.has_excess, "settlement_amount": claim.settlement_amount, "total_words": thai_baht_text(claim.requested_total)})
+
+
+def claim_print_final_signoffs(claim):
+    """Show one final text sign-off per role from the effective approval round."""
+    records = list(claim.approval_records.select_related('actor').order_by('created_at', 'pk'))
+    start = max((i for i, record in enumerate(records)
+                 if record.action == ClaimApproval.Action.SUBMITTED
+                 and record.status_before in (ClaimRequest.Status.DRAFT, ClaimRequest.Status.RETURNED)), default=0)
+    records = records[start:]
+    # A correction can require fresh accounting/CFO approvals without repeating the head's approval.
+    correction = max((i for i, record in enumerate(records)
+                      if record.action == ClaimApproval.Action.AMOUNT_CORRECTED
+                      and record.status_after == ClaimRequest.Status.PENDING_ACCOUNTING), default=-1)
+    excess_start = max((i for i, record in enumerate(records)
+                        if record.action == ClaimApproval.Action.EXCESS_SUBMITTED), default=-1)
+    latest = {}
+    supplemental = False
+    roles = {
+        ClaimRequest.Status.PENDING_BUDGET_APPROVAL: 'อนุมัติ Budget',
+        ClaimRequest.Status.PENDING_SUPERVISOR: 'หัวหน้าอนุมัติ',
+        ClaimRequest.Status.PENDING_EXECUTIVE: 'ผู้บริหารอนุมัติ',
+        ClaimRequest.Status.PENDING_ACCOUNTING: 'ผู้จัดการบัญชีอนุมัติ',
+        ClaimRequest.Status.PENDING_EXCESS_APPROVAL: 'ผู้จัดการบัญชีอนุมัติส่วนต่าง',
+    }
+    for index, record in enumerate(records):
+        action = record.action
+        if action == ClaimApproval.Action.SUPPLEMENTAL_PAID:
+            supplemental = True
+        if action == ClaimApproval.Action.APPROVED:
+            if record.status_before == ClaimRequest.Status.PENDING_ACCOUNTING and index < correction:
+                continue
+            if record.status_before == ClaimRequest.Status.PENDING_EXCESS_APPROVAL and index < excess_start:
+                continue
+            label = roles.get(record.status_before, 'อนุมัติ')
+            if record.actor_id == claim.cfo_id and record.status_before in (ClaimRequest.Status.PENDING_ACCOUNTING, ClaimRequest.Status.PENDING_EXCESS_APPROVAL):
+                label = 'CFO อนุมัติส่วนต่าง' if record.status_before == ClaimRequest.Status.PENDING_EXCESS_APPROVAL else 'CFO อนุมัติ'
+            key = (label, record.actor_id if record.status_before == ClaimRequest.Status.PENDING_BUDGET_APPROVAL else None)
+        elif action == ClaimApproval.Action.ACKNOWLEDGED:
+            is_excess = 'ยอดใช้เกิน' in record.comment or record.status_before == ClaimRequest.Status.PENDING_EXCESS_APPROVAL
+            if is_excess and index < excess_start:
+                continue
+            if not is_excess and index < correction:
+                continue
+            label = 'CFO รับทราบส่วนต่าง' if is_excess else 'CFO รับทราบ'
+            key = (label, None)
+        else:
+            label = {
+                ClaimApproval.Action.PAID: 'จ่ายเงินตามคำขอ',
+                ClaimApproval.Action.SUPPLEMENTAL_PAID: 'จ่ายเงินส่วนต่าง',
+                ClaimApproval.Action.RECEIVED: 'ยืนยันรับเงินส่วนต่าง' if supplemental else 'ยืนยันรับเงิน',
+                ClaimApproval.Action.AUTO_RECEIVED: 'รับเงินส่วนต่างอัตโนมัติ' if supplemental else 'รับเงินอัตโนมัติ',
+                ClaimApproval.Action.COMPLETED: 'ตรวจสอบและปิดรายการ',
+            }.get(action)
+            if action == ClaimApproval.Action.SUBMITTED:
+                label = 'ยื่นคำขอ' if record.status_before in (ClaimRequest.Status.DRAFT, ClaimRequest.Status.RETURNED) else 'ส่งยอดใช้จริง'
+            if action == ClaimApproval.Action.EXCESS_SUBMITTED:
+                label = 'ส่งยอดใช้จริงเพื่ออนุมัติส่วนต่าง'
+            if not label:
+                continue
+            key = ('receipt' if action in (ClaimApproval.Action.RECEIVED, ClaimApproval.Action.AUTO_RECEIVED) else label, supplemental)
+        latest[key] = {'label': label,
+                       'name': (record.actor.get_full_name() or record.actor.username) if record.actor else 'ระบบอัตโนมัติ',
+                       'actor_id': record.actor_id,
+                       'at': record.created_at, 'pk': record.pk,
+                       'automatic': action == ClaimApproval.Action.AUTO_RECEIVED}
+    # Print a compact final sign-off per role, rather than an event timeline.
+    final_roles = {
+        'ยื่นคำขอ': ('requester', 'ผู้ขอเบิก', 0),
+        'อนุมัติ Budget': ('budget', 'ผู้อนุมัติ Budget', 1),
+        'หัวหน้าอนุมัติ': ('supervisor', 'ผู้ตรวจสอบ', 2),
+        'ผู้บริหารอนุมัติ': ('executive', 'ผู้บริหาร', 2),
+        'ผู้จัดการบัญชีอนุมัติ': ('manager', 'ผู้อนุมัติ', 3),
+        'ผู้จัดการบัญชีอนุมัติส่วนต่าง': ('manager', 'ผู้อนุมัติ', 3),
+        'CFO อนุมัติ': ('cfo', 'CFO ผู้อนุมัติ', 4),
+        'CFO อนุมัติส่วนต่าง': ('cfo', 'CFO ผู้อนุมัติ', 4),
+        'จ่ายเงินตามคำขอ': ('payer', 'ผู้จ่ายเงิน', 5),
+        'จ่ายเงินส่วนต่าง': ('payer', 'ผู้จ่ายเงิน', 5),
+        'ยืนยันรับเงิน': ('receiver', 'ผู้รับเงิน', 6),
+        'ยืนยันรับเงินส่วนต่าง': ('receiver', 'ผู้รับเงิน', 6),
+        'รับเงินอัตโนมัติ': ('receiver', 'ผู้รับเงิน', 6),
+        'รับเงินส่วนต่างอัตโนมัติ': ('receiver', 'ผู้รับเงิน', 6),
+    }
+    final = {}
+    for row in sorted(latest.values(), key=lambda row: (row['at'], row['pk'])):
+        role = final_roles.get(row['label'])
+        if not role:
+            continue
+        key, label, order = role
+        if key == 'budget':
+            key = (key, row['actor_id'])
+        final[key] = {**row, 'label': label, 'order': order}
+    if 'requester' not in final:
+        final['requester'] = {'label': 'ผู้ขอเบิก',
+                              'name': claim.requester.get_full_name() or claim.requester.username,
+                              'at': None, 'automatic': False, 'order': 0}
+    return sorted(final.values(), key=lambda row: row['order'])
 
 
 def claim_print_signers(claim):

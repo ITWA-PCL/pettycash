@@ -13,6 +13,7 @@ from apps.core.master_import import budget_import, budget_import_template
 from apps.core.server_configuration import server_configuration
 from apps.accounts.views import signature_image
 from apps.claims.views import claim_signature_image
+from apps.core.views import system_web_health
 
 
 urlpatterns = [
@@ -38,6 +39,7 @@ urlpatterns = [
     path('settings/system/server/', server_configuration, name='server_configuration'),
     path('settings/system/telegram-webhook/', configure_telegram_webhook, name='configure_telegram_webhook'),
     path("settings/overview/", system_overview, name="system_overview"),
+    path("settings/overview/health/", system_web_health, name="system_web_health"),
     path("settings/operations/", admin_operations, name="admin_operations"),
     path("settings/users/new/", user_create, name="user_create"),
     path("settings/users/<int:user_id>/", user_edit, name="user_edit"),
