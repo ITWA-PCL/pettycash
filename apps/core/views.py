@@ -3,13 +3,15 @@ from django.contrib import messages
 from django.db import connection, transaction
 from django.conf import settings
 from django.db.models import Count, Q, Sum
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponseForbidden, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from urllib.parse import urlparse
 import socket
+import time
 from uuid import uuid4
 from datetime import date, timedelta
 from decimal import Decimal
@@ -570,3 +572,155 @@ def admin_operations(request):
     action_codes = AdminAuditLog.objects.order_by("action").values_list("action", flat=True).distinct()
     audit_actions = [{"code": action, "label": AUDIT_ACTION_LABELS.get(action, action.replace("_", " ").title())} for action in action_codes]
     return render(request, "core/admin_operations.html", {"database_ok": database_ok, "configuration": configuration, "audit_logs": audit_logs, "users": [], "claims": [], "incomplete_users": incomplete_users, "test_result": test_result, "audit_query": audit_query, "audit_action": audit_action, "audit_actor": audit_actor, "audit_date_from": audit_date_from, "audit_date_to": audit_date_to, "audit_actions": audit_actions, "audit_actors": User.objects.filter(adminauditlog__isnull=False).distinct().order_by("username"), "page_obj": page_obj, "page_size": page_size, "query_params": query_params})
+
+
+@login_required
+def ciam_settings_api(request):
+    """GET / PUT /api/settings/ciam-sso (Section A.1 & A.2)"""
+    if not can_manage_users(request.user):
+        return HttpResponseForbidden("Admin only")
+
+    config = get_system_settings()
+
+    if request.method == "GET":
+        raw_secret = config.ciam_client_secret or ""
+        masked_secret = f"sec_****_{raw_secret[-4:]}" if len(raw_secret) > 4 else "sec_****_none"
+        raw_m2m = config.ciam_m2m_key or ""
+        masked_m2m = f"sec_****_{raw_m2m[-4:]}" if len(raw_m2m) > 4 else "sec_****_none"
+        return JsonResponse({
+            "status": "success",
+            "settings": {
+                "ciam_base_url": config.ciam_base_url,
+                "ciam_client_id": config.ciam_client_id,
+                "ciam_client_secret_masked": masked_secret,
+                "ciam_m2m_key_masked": masked_m2m,
+                "ciam_sso_enabled": config.ciam_sso_enabled,
+                "ciam_break_glass_active": config.ciam_break_glass_active,
+                "ciam_ad_gateway_url": config.ad_gateway_url,
+                "ciam_auto_provision_group": config.ciam_auto_provision_group,
+                "ciam_session_ttl_minutes": config.ciam_session_ttl_minutes,
+                "updated_at": config.updated_at.isoformat() if config.updated_at else "",
+            }
+        })
+
+    elif request.method in ("PUT", "POST"):
+        import json
+        from .audit import record_transaction_log
+        try:
+            body = json.loads(request.body) if request.body else {}
+        except Exception:
+            body = request.POST.dict()
+
+        changed_fields = []
+        if "ciam_base_url" in body:
+            config.ciam_base_url = body["ciam_base_url"].rstrip("/")
+            changed_fields.append("ciam_base_url")
+        if "ciam_client_id" in body:
+            config.ciam_client_id = body["ciam_client_id"]
+            changed_fields.append("ciam_client_id")
+        if "ciam_client_secret" in body:
+            secret = body["ciam_client_secret"]
+            if secret and not secret.startswith("sec_****"):
+                config.ciam_client_secret = secret
+                changed_fields.append("ciam_client_secret")
+        if "ciam_m2m_key" in body:
+            m2m_key = body["ciam_m2m_key"]
+            if m2m_key and not m2m_key.startswith("sec_****"):
+                config.ciam_m2m_key = m2m_key
+                changed_fields.append("ciam_m2m_key")
+        if "ciam_sso_enabled" in body:
+            config.ciam_sso_enabled = bool(body["ciam_sso_enabled"])
+            changed_fields.append("ciam_sso_enabled")
+        if "ciam_auto_provision_group" in body:
+            config.ciam_auto_provision_group = body["ciam_auto_provision_group"]
+            changed_fields.append("ciam_auto_provision_group")
+        if "ciam_session_ttl_minutes" in body:
+            config.ciam_session_ttl_minutes = int(body["ciam_session_ttl_minutes"])
+            changed_fields.append("ciam_session_ttl_minutes")
+
+        config.save()
+        record_transaction_log(
+            category="system_setting",
+            action="update_ciam_settings",
+            status="success",
+            message="แก้ไขการตั้งค่าระบบ Central IAM SSO",
+            details={"changed_fields": changed_fields, "ip": request.META.get("REMOTE_ADDR")},
+            triggered_by=f"user:{request.user.username}",
+        )
+        return JsonResponse({"status": "success", "message": "บันทึกการตั้งค่า Central IAM เรียบร้อยแล้ว"})
+
+
+@login_required
+def ciam_test_connection(request):
+    """POST /api/settings/ciam-sso/test-connection (Section A.3)"""
+    if not can_manage_users(request.user):
+        return HttpResponseForbidden("Admin only")
+
+    config = get_system_settings()
+    base_url = (config.ciam_base_url or "https://ciam.windowasia.com").rstrip("/")
+    start_ts = time.time()
+
+    import requests
+    try:
+        oidc_url = f"{base_url}/.well-known/openid-configuration"
+        res = requests.get(oidc_url, timeout=3)
+        latency_ms = int((time.time() - start_ts) * 1000)
+
+        if res.status_code == 200:
+            data = res.json()
+            jwks_uri = data.get("jwks_uri", f"{base_url}/.well-known/jwks.json")
+            jwks_res = requests.get(jwks_uri, timeout=3)
+            keys = jwks_res.json().get("keys", []) if jwks_res.status_code == 200 else []
+            key_id = keys[0].get("kid", "unknown") if keys else "none"
+
+            return JsonResponse({
+                "status": "connected",
+                "latency_ms": latency_ms,
+                "ciam_issuer": data.get("issuer", base_url),
+                "jwks_uri": jwks_uri,
+                "keys_found": len(keys),
+                "key_id": key_id,
+                "message": "สามารถเชื่อมต่อไปยัง Window Asia Central IAM ได้อย่างสมบูรณ์",
+            })
+        else:
+            return JsonResponse({
+                "status": "error",
+                "latency_ms": latency_ms,
+                "message": f"Central IAM ตอบกลับสถานะ HTTP {res.status_code}",
+            }, status=502)
+    except Exception as exc:
+        latency_ms = int((time.time() - start_ts) * 1000)
+        return JsonResponse({
+            "status": "disconnected",
+            "latency_ms": latency_ms,
+            "message": f"ไม่สามารถเชื่อมต่อไปยัง Central IAM: {exc}",
+        }, status=504)
+
+
+@login_required
+def ciam_sync_now(request):
+    """Mandatory Spoke Mode C Immediate Sync Button: POST /api/settings/ciam-agent/sync-now (Section D.4)"""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not can_manage_users(request.user):
+        return HttpResponseForbidden("Admin only")
+
+    from .ciam_agent import run_agent_cycle
+    new_results, _, data = run_agent_cycle(is_full_sync=True)
+    summary_msg = f"ซิงก์ข้อมูลกับ Central IAM สำเร็จ (ดำเนินการ {len(new_results)} คำสั่ง)"
+
+    if "error" in data:
+        summary_msg = f"ซิงก์ข้อมูลไม่สำเร็จ: {data['error']}"
+        messages.error(request, summary_msg)
+    else:
+        messages.success(request, summary_msg)
+
+    if request.headers.get("accept", "").startswith("application/json"):
+        return JsonResponse({"status": "success" if "error" not in data else "error", "message": summary_msg, "results": new_results, "data": data})
+
+    next_url = request.POST.get("next") or reverse("user_list")
+    if not url_has_allowed_host_and_scheme(next_url, {request.get_host()}):
+        next_url = reverse("user_list")
+
+    return redirect(next_url)

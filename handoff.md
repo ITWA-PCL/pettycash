@@ -1,5 +1,40 @@
 # บันทึกส่งต่องาน: Petty Cash
 
+## 13 พฤศจิกายน 2026 — พัฒนาระบบความปลอดภัยตามมาตรฐาน Central IAM v2.12.0 ครบทั้ง 5 ด้าน
+
+- **1. นโยบายรหัสผ่านท้องถิ่น 90 วันและความซับซ้อน (หมวด G / ข้อกำหนด 13) — เฉพาะ Local Account:**
+  - เพิ่มฟิลด์ `password_changed_at` และ `must_change_password` ในโมเดล `User` (migration `accounts.0014`)
+  - ตรวจสอบความซับซ้อนเข้มงวด: 8 - 16 ตัวอักษร, พิมพ์ใหญ่ (A-Z) $\ge$ 1, พิมพ์เล็ก (a-z) $\ge$ 1, ตัวเลข (0-9) $\ge$ 1, อักขระพิเศษ $\ge$ 1 และห้ามมี Username ปะปน
+  - เพิ่ม `PasswordRotationMiddleware` กักกันสิทธิ์เมื่อรหัสผ่านเกิน 90 วัน หรือติดแฟล็ก `must_change_password` บังคับเข้าหน้า `/profile/password/change/` เท่านั้น (ห้ามข้าม)
+  - หน้าเปลี่ยนรหัสผ่านมี Interactive Real-time Checklist และคำนวณอายุรหัสผ่าน 90 วันอัตโนมัติ
+  - ยกเว้นบัญชี Active Directory (`is_ad_auth = True`) ให้ใช้นโยบายของ AD ตามข้อกำหนด
+- **2. ระบบป้องกันบอทและ Brute-Force 3 ชั้น (หมวด F):**
+  - Layer 1: Sliding-Window IP Rate Limiting 10 requests / 60 วินาที พร้อม Corporate IP Whitelist
+  - Layer 2: Decoy Honeypot Trap ฟิลด์หลอก `corporate_fax` และ `security_honey` ซ่อนสายตา ปฏิเสธแบบ Silent 401
+  - Layer 3: Submission Velocity & Timing Guard ตรวจจับ `form_render_ts` ปฏิเสธคำขอที่เร็วกว่า 400ms (HTTP 400)
+- **3. โครงสร้าง Central IAM Settings & Audit Logs (หมวด 1, 2, A):**
+  - เพิ่มฟิลด์ OIDC/CIAM ใน `SystemSettings` (migration `core.0028`): `ciam_base_url`, `ciam_client_id`, `ciam_client_secret` (เข้ารหัสด้วย SecretTextField), `ciam_sso_enabled`, `ciam_break_glass_active`, `ciam_auto_provision_group`, `ciam_session_ttl_minutes`
+  - สร้างโมเดล `TransactionLog` รองรับมาตรฐาน ISO 27001 Security Audit Trail
+  - เปิด REST API `/api/settings/ciam-sso/` (GET Masked secret / PUT) และ `/api/settings/ciam-sso/test-connection/`
+- **4. ระบบยืนยันตัวตน Single Sign-On OIDC / PKCE S256 (หมวด B & 5):**
+  - รองรับ OIDC PKCE S256 (`/api/auth/sso/authorize-url/`), Asymmetric RS256 JWKS Signature Verification (`/auth/sso/callback/`), Auto-provisioning ผู้ใช้ใหม่ด้วยสิทธิ์ต่ำสุด (Least Privilege), และ RFC 9700 Seamless Portal Bounce (`/auth/start/`)
+  - สวิตช์ฉุกเฉิน Break-Glass (`/api/auth/sso/break-glass-toggle/`)
+  - ปรับ Responsive หน้า Login: แสดงปุ่ม SSO กะทัดรัดด้านบนสำหรับ Desktop, ด้านล่างสำหรับ Mobile, และ Clean Standard Login เมื่อปิด SSO
+  - Seamless Logout: หากเข้าผ่าน SSO จะ Redirect กลับสู่ Central IAM Portal (`https://ciam.windowasia.com/portal`) อัตโนมัติ
+- **5. การซิงก์บัญชีและระงับสิทธิ์ 1-Click Offboarding แบบ Mode C (หมวด D):**
+  - พัฒนา `apps/core/ciam_agent.py` สำหรับส่ง Reverse Heartbeat ทุก 120s และรับคำสั่ง `DISABLE_USER`, `ENABLE_USER`, `PROVISION_USER`, `REQUEST_FULL_SYNC`
+  - มี Guardrail ป้องกันการระงับสิทธิ์บัญชีผู้ดูแลระบบฉุกเฉิน (`admin`, `superadmin`, `emergency_admin`)
+  - เพิ่มปุ่ม `[ ⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที ]` บนหน้ารายการผู้ใช้และหน้าตั้งค่าระบบ (`/api/settings/ciam-agent/sync-now/`)
+- ผลการทดสอบ: ผ่านครบทั้ง 26 tests ใน `tests_security_ciam` และชุดทดสอบ `apps.accounts` รวม 58 tests ผ่าน 100%
+
+## 13 พฤศจิกายน 2026 — ข้อกำหนดการ Push โค้ด
+
+- **ข้อกำหนดสำคัญ (ยืนยันโดยผู้ใช้):** ในส่วนการทำงานของเราจะ push เข้าที่ branch `Sec1` เท่านั้น ห้าม push เข้า `main` หรือ branch อื่นโดยตรง
+- **ขั้นตอนการส่งงาน (SOP) เมื่อทีม Sec1 แก้เสร็จ:**
+  1. `git status` — ตรวจว่าอยู่บน branch `Sec1` เสมอ (หากไม่ใช่ให้หยุดทันที) และตรวจรายการไฟล์ว่า **ไม่มี** `.env`, รหัสผ่าน, ไฟล์ฐานข้อมูล หรือข้อมูลจริงปนเปื้อน
+  2. `git add .` และ `git commit -m "security: อธิบายสิ่งที่แก้"`
+  3. `git push -u origin Sec1` — push ขึ้น GitHub เฉพาะ branch `Sec1` เท่านั้น
+
 ## ปิดงาน 12 พฤศจิกายน 2026 — อนุมัติส่ง Git
 
 - ส่งโค้ดสำเร็จ commit 794dfbd ขึ้น origin/process-flow เปิด PR #5: https://github.com/ITWA-PCL/pettycash/pull/5 (รอเจ้าของตรวจ/อนุมัติ) ไม่มีไฟล์งานค้างนอก commit หลังส่ง บันทึกเลข PR เพิ่มเป็น commit เอกสารแยก

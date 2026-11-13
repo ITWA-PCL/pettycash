@@ -1,5 +1,5 @@
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, update_session_auth_hash
+from django.contrib.auth import authenticate, login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Q
@@ -9,12 +9,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from .forms import ProfileDetailsForm, ProfilePasswordForm, SignatureSetupForm, UserManagementForm
+from .forms import ForcedPasswordChangeForm, ProfileDetailsForm, ProfilePasswordForm, SignatureSetupForm, UserManagementForm
 from .models import User
 from .roles import SUPER_ADMIN
 from .ad_auth import ADGatewayError, verify_ad_credentials
+from .bot_defense import verify_bot_defense
+from .ciam_sso import build_sso_authorize_url, exchange_code_and_login
 from apps.core.telegram import send_telegram_message, telegram_is_configured
-from apps.core.audit import log_event
+from apps.core.audit import log_event, record_transaction_log
 from apps.core.pagination import paginate
 from apps.core.system_settings import get_system_settings
 
@@ -43,11 +45,47 @@ def is_last_active_admin(user):
 def login_view(request):
     error = None
     next_url = request.POST.get("next") or request.GET.get("next") or ""
+    config = get_system_settings()
+
+    # If already authenticated, redirect to next_url or dashboard
+    if request.user.is_authenticated:
+        if next_url and url_has_allowed_host_and_scheme(next_url, {request.get_host()}):
+            return redirect(next_url)
+        return redirect("dashboard")
+
+    # If incoming request is a callback with SSO code / state, bounce to callback view
+    if (request.GET.get("code") or request.POST.get("code")) and (request.GET.get("state") or request.POST.get("state")):
+        return sso_callback_view(request)
+
     if request.method == "POST":
+        # Enterprise Bot Defense (Layer 1, 2, 3 - Section 12)
+        passed, bot_error, status_code = verify_bot_defense(request)
+        if not passed:
+            record_transaction_log(
+                category="bot_defense",
+                action="blocked_request",
+                status="warning",
+                message=bot_error,
+                details={"ip": request.META.get("REMOTE_ADDR"), "status_code": status_code},
+                triggered_by="system:bot_defense",
+            )
+            return render(
+                request,
+                "registration/login.html",
+                {
+                    "login_error": bot_error,
+                    "next": next_url,
+                    "sso_enabled": config.ciam_sso_enabled,
+                    "break_glass_active": config.ciam_break_glass_active,
+                },
+                status=status_code,
+            )
+
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         login_mode = request.POST.get("login_mode", "local")
         user = None
+
         if login_mode == "ad":
             try:
                 candidate = User.objects.get(username__iexact=username, is_active=True, is_ad_auth=True)
@@ -66,13 +104,163 @@ def login_view(request):
                 user = authenticate(request, username=username, password=password)
             if user is None:
                 error = error or "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"
+
         if user is not None:
             login(request, user)
+            request.session["auth_provider"] = "local"
             log_event(user, "LOGIN_AD" if login_mode == "ad" else "LOGIN_LOCAL", user.username)
+            record_transaction_log(
+                category="authentication",
+                action="login_success",
+                status="success",
+                message=f"เข้าสู่ระบบสำเร็จ ({login_mode.upper()}): {user.username}",
+                details={"username": user.username, "mode": login_mode},
+                triggered_by=f"user:{user.username}",
+            )
             if next_url and url_has_allowed_host_and_scheme(next_url, {request.get_host()}):
                 return redirect(next_url)
             return redirect("dashboard")
-    return render(request, "registration/login.html", {"login_error": error, "next": next_url})
+
+    return render(
+        request,
+        "registration/login.html",
+        {
+            "login_error": error,
+            "next": next_url,
+            "sso_enabled": config.ciam_sso_enabled,
+            "break_glass_active": config.ciam_break_glass_active,
+        },
+    )
+
+
+@login_required
+def forced_password_change(request):
+    """
+    Forced 90-Day Password Rotation & Complexity Interception (Section 13).
+    Restricted strictly to local accounts.
+    """
+    if not request.user.is_local_account:
+        return redirect("dashboard")
+
+    form = ForcedPasswordChangeForm(request.user, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
+        update_session_auth_hash(request, user)
+        record_transaction_log(
+            category="password_policy",
+            action="change_password",
+            status="success",
+            message=f"ผู้ใช้ '{user.username}' เปลี่ยนรหัสผ่านใหม่เรียบร้อยแล้ว (มีอายุการใช้งาน 90 วัน)",
+            details={"username": user.username, "policy": "90_day_rotation"},
+            triggered_by=f"user:{user.username}",
+        )
+        log_event(user, "CHANGE_PASSWORD_ROTATION", user.username)
+        messages.success(request, "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว (มีอายุการใช้งาน 90 วัน)")
+        if not user.has_signature and get_system_settings().require_signature_on_first_login:
+            return redirect("signature_setup")
+        return redirect("dashboard")
+
+    is_expired, days_left = request.user.check_password_expired()
+    return render(
+        request,
+        "registration/forced_password_change.html",
+        {
+            "form": form,
+            "is_expired": is_expired,
+            "must_change": request.user.must_change_password,
+            "days_left": days_left,
+        },
+    )
+
+
+def sso_config_view(request):
+    """GET /api/auth/sso/config (Section B.1)"""
+    config = get_system_settings()
+    return JsonResponse({
+        "sso_enabled": config.ciam_sso_enabled,
+        "break_glass_active": config.ciam_break_glass_active,
+        "ciam_base_url": config.ciam_base_url,
+        "client_id": config.ciam_client_id,
+        "login_button_label": "เข้าสู่ระบบด้วย Window Asia SSO ✨",
+        "fallback_ad_available": config.ad_enabled,
+    })
+
+
+def sso_authorize_url_view(request):
+    """POST /api/auth/sso/authorize-url (Section B.2)"""
+    redirect_uri = request.POST.get("redirect_uri") or request.build_absolute_uri(reverse("sso_callback"))
+    auth_url, verifier, state = build_sso_authorize_url(request, redirect_uri)
+    return JsonResponse({
+        "authorize_url": auth_url,
+        "code_verifier": verifier,
+        "state": state,
+    })
+
+
+def sso_login_redirect(request):
+    """Browser initiation for SSO login."""
+    redirect_uri = request.build_absolute_uri(reverse("sso_callback"))
+    auth_url, _, _ = build_sso_authorize_url(request, redirect_uri)
+    return redirect(auth_url)
+
+
+def sso_start_view(request):
+    """RFC 9700 Seamless SSO Initiation Bounce Endpoint (Section B.3)."""
+    redirect_uri = request.build_absolute_uri(reverse("sso_callback"))
+    auth_url, _, _ = build_sso_authorize_url(request, redirect_uri)
+    return redirect(auth_url)
+
+
+def sso_callback_view(request):
+    """GET/POST /auth/sso/callback (Section B.3)"""
+    code = request.GET.get("code") or request.POST.get("code")
+    state = request.GET.get("state") or request.POST.get("state")
+    redirect_uri = request.build_absolute_uri(reverse("sso_callback"))
+
+    if not code:
+        messages.error(request, "ไม่พบ Authorization Code จาก Central IAM")
+        return redirect("login")
+
+    user, error = exchange_code_and_login(request, code, None, redirect_uri, state)
+    if error:
+        messages.error(request, error)
+        return redirect("login")
+
+    return redirect("dashboard")
+
+
+@user_passes_test(can_manage_users)
+def sso_break_glass_toggle(request):
+    """POST /api/auth/sso/break-glass-toggle (Section B.4)"""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    config = get_system_settings()
+    new_state = not config.ciam_break_glass_active
+    config.ciam_break_glass_active = new_state
+    config.save(update_fields=["ciam_break_glass_active"])
+
+    status_str = "ENABLED" if new_state else "DISABLED"
+    record_transaction_log(
+        category="security_break_glass",
+        action="toggle_break_glass",
+        status="warning" if new_state else "info",
+        message=f"สลับสถานะระบบ Break-Glass: {status_str}",
+        details={"break_glass_active": new_state, "admin": request.user.username},
+        triggered_by=f"user:{request.user.username}",
+    )
+    messages.warning(request, f"ระบบ Break-Glass ถูก {'เปิดใช้งาน' if new_state else 'ปิดใช้งาน'}")
+    return redirect("system_settings")
+
+
+def logout_view(request):
+    """Seamless Logout: SSO users return to Portal, local users return to login (Section 5.3)."""
+    is_sso = request.session.get("auth_provider") == "ciam_sso"
+    portal_url = request.session.get("ciam_portal_url") or "https://ciam.windowasia.com/portal"
+    auth_logout(request)
+    if is_sso:
+        return redirect(portal_url)
+    return redirect("login")
 
 
 @login_required
@@ -242,3 +430,21 @@ def telegram_test_message(request):
     if not send_telegram_message(chat_id, text):
         return JsonResponse({"ok": False, "message": "ส่งไม่สำเร็จ: ให้ผู้ใช้นี้กด Start กับ Bot และตรวจสอบ Telegram User ID"}, status=502)
     return JsonResponse({"ok": True, "message": "ส่งข้อความทดสอบแล้ว กรุณาตรวจสอบ Telegram ของผู้ใช้นี้"})
+
+
+def ciam_directory_accounts_api(request):
+    """
+    Central IAM Spoke M2M REST API: GET /api/v1/directory/accounts/
+    Secured by X-Management-API-Key and Server IP Whitelist (Section D.1 / M2M)
+    """
+    config = get_system_settings()
+    expected_key = config.ciam_m2m_key or config.ciam_client_secret or ""
+
+    # Verify API Key
+    provided_key = request.headers.get("X-Management-API-Key") or request.META.get("HTTP_X_MANAGEMENT_API_KEY", "")
+    if not expected_key or provided_key != expected_key:
+        return JsonResponse({"error": "Unauthorized: Invalid or missing X-Management-API-Key"}, status=401)
+
+    from apps.core.ciam_agent import fetch_local_accounts
+    accounts = fetch_local_accounts()
+    return JsonResponse({"status": "success", "count": len(accounts), "accounts": accounts})

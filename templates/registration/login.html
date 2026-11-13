@@ -36,6 +36,38 @@
         </div>
         <p class="login-description">เลือกวิธีเข้าสู่ระบบ แล้วใช้ Username เดียวกับบัญชีที่ผู้ดูแลตั้งไว้</p>
 
+        {% if break_glass_active %}
+          <div class="alert login-alert" role="alert" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #d97706; margin-bottom: 1rem;">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+            <span>⚠️ ระบบอยู่ในโหมดฉุกเฉิน (Break-Glass Active) - กรุณาเข้าใช้งานด้วยรหัสผ่านตรง</span>
+          </div>
+        {% endif %}
+
+        {% if sso_enabled and not break_glass_active %}
+          <!-- Desktop SSO Button (Compact, Top) -->
+          <div class="desktop-sso-wrap" style="margin-bottom: 1rem;">
+            <a href="{% url 'sso_login_redirect' %}" class="button" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.65rem 1rem; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #2563eb, #4f46e5); color: #ffffff; border: none; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); cursor: pointer; transition: transform 0.15s ease;">
+              <span>🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨</span>
+            </a>
+            <div style="display: flex; align-items: center; text-align: center; margin: 1rem 0; color: #94a3b8; font-size: 0.75rem;">
+              <span style="flex: 1; border-bottom: 1px solid rgba(148, 163, 184, 0.25);"></span>
+              <span style="padding: 0 0.75rem;">หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน</span>
+              <span style="flex: 1; border-bottom: 1px solid rgba(148, 163, 184, 0.25);"></span>
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- Invisible Anti-Bot Honeypot Decoy Fields (Section 12 / Layer 2) -->
+        <div style="position: absolute; left: -9999px; opacity: 0; height: 0; width: 0; overflow: hidden; pointer-events: none;" aria-hidden="true" tabindex="-1">
+          <label for="id_corporate_fax">Corporate Fax</label>
+          <input id="id_corporate_fax" type="text" name="corporate_fax" tabindex="-1" autocomplete="off">
+          <label for="id_security_honey">Security Code</label>
+          <input id="id_security_honey" type="text" name="security_honey" tabindex="-1" autocomplete="off">
+        </div>
+
+        <!-- Submission Velocity & Timing Guard (Section 12 / Layer 3) -->
+        <input type="hidden" name="form_render_ts" id="form_render_ts" value="">
+
         {% if login_error %}
           <div class="alert login-alert" role="alert">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
@@ -71,6 +103,7 @@
           <span id="login-submit-label">เข้าสู่ระบบด้วย Active Directory</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
         </button>
+
         <p class="login-help">หากเข้าใช้งานไม่ได้ โปรดติดต่อผู้ดูแลระบบ</p>
         <p class="login-credit">© {% now "Y" %} Window Asia <span aria-hidden="true">·</span> Developed by <strong>IT WA</strong></p>
       </form>
@@ -78,6 +111,11 @@
   </section>
   <script>
     (() => {
+      // Record form render timestamp for Timing Guard (Section 12 / Layer 3)
+      const tsInput = document.getElementById('form_render_ts');
+      if (tsInput) {
+        tsInput.value = Date.now();
+      }
       const password = document.getElementById('id_password');
       const toggle = document.getElementById('password-visibility-toggle');
       if (!password || !toggle) return;

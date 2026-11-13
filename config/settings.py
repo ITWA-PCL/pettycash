@@ -33,6 +33,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.accounts.middleware.PasswordRotationMiddleware",
     "apps.core.middleware.MaintenanceModeMiddleware",
     "apps.accounts.middleware.SignatureOnboardingMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
