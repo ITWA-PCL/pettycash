@@ -403,7 +403,6 @@ class CentralIAMIntegrationTests(TestCase):
         self.assertEqual(res.status_code, 302)
         self.assertIn("login", res.url)
 
-
 class ModeCDirectoryAgentTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(

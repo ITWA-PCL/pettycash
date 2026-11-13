@@ -44,8 +44,8 @@
         {% endif %}
 
         {% if sso_enabled and not break_glass_active %}
-          <!-- Desktop SSO Button (Compact, Top) -->
-          <div class="desktop-sso-wrap" style="margin-bottom: 1rem;">
+          <!-- SSO Initiation Option (Top) -->
+          <div class="sso-launch-wrap" style="margin-bottom: 1rem;">
             <a href="{% url 'sso_login_redirect' %}" class="button" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.65rem 1rem; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #2563eb, #4f46e5); color: #ffffff; border: none; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); cursor: pointer; transition: transform 0.15s ease;">
               <span>🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨</span>
             </a>
@@ -103,7 +103,6 @@
           <span id="login-submit-label">เข้าสู่ระบบด้วย Active Directory</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
         </button>
-
         <p class="login-help">หากเข้าใช้งานไม่ได้ โปรดติดต่อผู้ดูแลระบบ</p>
         <p class="login-credit">© {% now "Y" %} Window Asia <span aria-hidden="true">·</span> Developed by <strong>IT WA</strong></p>
       </form>

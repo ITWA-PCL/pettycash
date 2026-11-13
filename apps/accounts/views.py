@@ -56,7 +56,6 @@ def login_view(request):
     # If incoming request is a callback with SSO code / state, bounce to callback view
     if (request.GET.get("code") or request.POST.get("code")) and (request.GET.get("state") or request.POST.get("state")):
         return sso_callback_view(request)
-
     if request.method == "POST":
         # Enterprise Bot Defense (Layer 1, 2, 3 - Section 12)
         passed, bot_error, status_code = verify_bot_defense(request)
