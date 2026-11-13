@@ -47,6 +47,15 @@ def login_view(request):
     next_url = request.POST.get("next") or request.GET.get("next") or ""
     config = get_system_settings()
 
+    # If already authenticated, redirect to next_url or dashboard
+    if request.user.is_authenticated:
+        if next_url and url_has_allowed_host_and_scheme(next_url, {request.get_host()}):
+            return redirect(next_url)
+        return redirect("dashboard")
+
+    # If incoming request is a callback with SSO code / state, bounce to callback view
+    if (request.GET.get("code") or request.POST.get("code")) and (request.GET.get("state") or request.POST.get("state")):
+        return sso_callback_view(request)
     if request.method == "POST":
         # Enterprise Bot Defense (Layer 1, 2, 3 - Section 12)
         passed, bot_error, status_code = verify_bot_defense(request)
@@ -420,3 +429,21 @@ def telegram_test_message(request):
     if not send_telegram_message(chat_id, text):
         return JsonResponse({"ok": False, "message": "ส่งไม่สำเร็จ: ให้ผู้ใช้นี้กด Start กับ Bot และตรวจสอบ Telegram User ID"}, status=502)
     return JsonResponse({"ok": True, "message": "ส่งข้อความทดสอบแล้ว กรุณาตรวจสอบ Telegram ของผู้ใช้นี้"})
+
+
+def ciam_directory_accounts_api(request):
+    """
+    Central IAM Spoke M2M REST API: GET /api/v1/directory/accounts/
+    Secured by X-Management-API-Key and Server IP Whitelist (Section D.1 / M2M)
+    """
+    config = get_system_settings()
+    expected_key = config.ciam_m2m_key or config.ciam_client_secret or ""
+
+    # Verify API Key
+    provided_key = request.headers.get("X-Management-API-Key") or request.META.get("HTTP_X_MANAGEMENT_API_KEY", "")
+    if not expected_key or provided_key != expected_key:
+        return JsonResponse({"error": "Unauthorized: Invalid or missing X-Management-API-Key"}, status=401)
+
+    from apps.core.ciam_agent import fetch_local_accounts
+    accounts = fetch_local_accounts()
+    return JsonResponse({"status": "success", "count": len(accounts), "accounts": accounts})

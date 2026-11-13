@@ -368,6 +368,40 @@ class CentralIAMIntegrationTests(TestCase):
             self.assertEqual(post_res.status_code, 302)
             self.assertEqual(post_res.url, reverse("user_list"))
 
+    def test_ciam_directory_accounts_m2m_api(self):
+        """Test GET /api/v1/directory/accounts/ with X-Management-API-Key."""
+        from apps.core.system_settings import get_system_settings
+        settings_obj = get_system_settings()
+        settings_obj.ciam_m2m_key = "test_management_api_key_valid"
+        settings_obj.save()
+
+        # 1. Missing / wrong key
+        res = self.client.get(reverse("ciam_directory_accounts_api"))
+        self.assertEqual(res.status_code, 401)
+
+        res = self.client.get(
+            reverse("ciam_directory_accounts_api"),
+            HTTP_X_MANAGEMENT_API_KEY="wrong_key",
+        )
+        self.assertEqual(res.status_code, 401)
+
+        # 2. Correct key
+        res = self.client.get(
+            reverse("ciam_directory_accounts_api"),
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertGreaterEqual(data["count"], 1)
+        self.assertIn("accounts", data)
+
+    def test_sso_callback_route_alias(self):
+        """Verify /auth/callback/ route is handled equivalently to /auth/sso/callback/."""
+        res = self.client.get(reverse("sso_callback_alias"))
+        # Should redirect to login when no code provided
+        self.assertEqual(res.status_code, 302)
+        self.assertIn("login", res.url)
 
 class ModeCDirectoryAgentTests(TestCase):
     def setUp(self):

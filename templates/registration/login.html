@@ -44,8 +44,8 @@
         {% endif %}
 
         {% if sso_enabled and not break_glass_active %}
-          <!-- Desktop SSO Button (Compact, Top) -->
-          <div class="desktop-sso-wrap" style="margin-bottom: 1rem;">
+          <!-- SSO Initiation Option (Top) -->
+          <div class="sso-launch-wrap" style="margin-bottom: 1rem;">
             <a href="{% url 'sso_login_redirect' %}" class="button" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.65rem 1rem; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #2563eb, #4f46e5); color: #ffffff; border: none; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); cursor: pointer; transition: transform 0.15s ease;">
               <span>🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨</span>
             </a>
@@ -103,21 +103,6 @@
           <span id="login-submit-label">เข้าสู่ระบบด้วย Active Directory</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
         </button>
-
-        {% if sso_enabled and not break_glass_active %}
-          <!-- Mobile Secondary SSO Option (Section 5.2) -->
-          <div class="mobile-sso-wrap" style="margin-top: 1.25rem;">
-            <div style="display: flex; align-items: center; text-align: center; margin-bottom: 0.75rem; color: #94a3b8; font-size: 0.75rem;">
-              <span style="flex: 1; border-bottom: 1px solid rgba(148, 163, 184, 0.25);"></span>
-              <span style="padding: 0 0.75rem;">หรือเข้าสู่ระบบด้วย</span>
-              <span style="flex: 1; border-bottom: 1px solid rgba(148, 163, 184, 0.25);"></span>
-            </div>
-            <a href="{% url 'sso_login_redirect' %}" class="button" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.6rem 1rem; font-size: 0.8rem; font-weight: 600; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.3); color: #e2e8f0; border-radius: 12px; text-decoration: none; cursor: pointer;">
-              <span>🛡️ Window Asia SSO ✨</span>
-            </a>
-          </div>
-        {% endif %}
-
         <p class="login-help">หากเข้าใช้งานไม่ได้ โปรดติดต่อผู้ดูแลระบบ</p>
         <p class="login-credit">© {% now "Y" %} Window Asia <span aria-hidden="true">·</span> Developed by <strong>IT WA</strong></p>
       </form>

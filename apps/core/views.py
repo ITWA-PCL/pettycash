@@ -585,12 +585,15 @@ def ciam_settings_api(request):
     if request.method == "GET":
         raw_secret = config.ciam_client_secret or ""
         masked_secret = f"sec_****_{raw_secret[-4:]}" if len(raw_secret) > 4 else "sec_****_none"
+        raw_m2m = config.ciam_m2m_key or ""
+        masked_m2m = f"sec_****_{raw_m2m[-4:]}" if len(raw_m2m) > 4 else "sec_****_none"
         return JsonResponse({
             "status": "success",
             "settings": {
                 "ciam_base_url": config.ciam_base_url,
                 "ciam_client_id": config.ciam_client_id,
                 "ciam_client_secret_masked": masked_secret,
+                "ciam_m2m_key_masked": masked_m2m,
                 "ciam_sso_enabled": config.ciam_sso_enabled,
                 "ciam_break_glass_active": config.ciam_break_glass_active,
                 "ciam_ad_gateway_url": config.ad_gateway_url,
@@ -620,6 +623,11 @@ def ciam_settings_api(request):
             if secret and not secret.startswith("sec_****"):
                 config.ciam_client_secret = secret
                 changed_fields.append("ciam_client_secret")
+        if "ciam_m2m_key" in body:
+            m2m_key = body["ciam_m2m_key"]
+            if m2m_key and not m2m_key.startswith("sec_****"):
+                config.ciam_m2m_key = m2m_key
+                changed_fields.append("ciam_m2m_key")
         if "ciam_sso_enabled" in body:
             config.ciam_sso_enabled = bool(body["ciam_sso_enabled"])
             changed_fields.append("ciam_sso_enabled")
