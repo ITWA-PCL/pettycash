@@ -2,6 +2,8 @@
 
 ## ปิดงาน 14 พฤศจิกายน 2026 — ผู้ใช้อนุมัติ push
 
+- ส่งสำเร็จ commit โค้ด 3cebc3a บน origin/process-flow เปิด PR #9 https://github.com/ITWA-PCL/pettycash/pull/9 เข้า main รอเจ้าของตรวจ ไม่มีการ merge/deploy งานนี้ บันทึกเลข PR เพิ่มเป็น commit เอกสาร
+
 - อนุมัติส่งงานค้างวันที่13–14: จัดแนวโปรไฟล์/ออกจากระบบ, login SSO โทนน้ำเงินแบบปุ่มหลักขนาดบาง44px, มือถือปรับตามความสูงจอให้ปุ่มหลักอยู่ใน viewport (ก่อนเปิดคีย์บอร์ด), สวิตช์ SSO/Break-Glass จุดเดียว, chevron dropdown และ Work location อิงโปรไฟล์/เปลี่ยนได้
 - ฐาน main ล่าสุด115b981 มี CIAM ของหัวหน้าอยู่ครบ ไม่แก้ protocol/endpoint/keys/นโยบาย security ส่งเฉพาะ8ไฟล์โค้ด/ทดสอบ/docs ไม่มี .env/DB/export/ภาพตัวอย่าง
 - ก่อนส่งตรวจชุดที่เกี่ยวข้องรวม100testsผ่าน20.601วินาที, Chromiumมือถือ5ขนาดปุ่มไม่จม พร้อมหน้าขอเบิกคอม/มือถือ/มืด/สว่าง, read-only audit23GET200, git diff check ผ่าน งานรอบนี้ไม่มี migration ใหม่

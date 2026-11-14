@@ -2,6 +2,8 @@
 
 ## ปิดงาน 14 พฤศจิกายน 2026 — อนุมัติส่ง Git
 
+- ส่งแล้วโค้ด commit 3cebc3a บน process-flow; PR #9 https://github.com/ITWA-PCL/pettycash/pull/9 รอเจ้าของตรวจ ไม่ merge/deploy บันทึกสถานะส่งจริงเพิ่มเป็น commit เอกสาร
+
 - ผู้ใช้สั่ง push งานดีไซน์ค้าง13–14และ Work location แล้ว ฐานmain115b981คงCIAMหัวหน้าครบ รวมประวัติremote process-flow b76397eก่อนส่งแบบไม่force push ส่ง8ไฟล์ เปิดPRเข้าmainให้เจ้าของตรวจ ไม่merge/deploy
 - ผลตรวจรวม100testsผ่าน20.601วินาที Chromium5ขนาดมือถือ/ฟอร์มเบิกสว่างมืดผ่าน read-only23GET200 ไม่มีmigrationใหม่ รายละเอียดด้านล่าง
 
