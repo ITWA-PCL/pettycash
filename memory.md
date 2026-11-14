@@ -1,5 +1,37 @@
 # บันทึกโครงการ: Petty Cash
 
+## ปิดงาน 14 พฤศจิกายน 2026 — อนุมัติส่ง Git
+
+- ผู้ใช้สั่ง push งานดีไซน์ค้าง13–14และ Work location แล้ว ฐานmain115b981คงCIAMหัวหน้าครบ รวมประวัติremote process-flow b76397eก่อนส่งแบบไม่force push ส่ง8ไฟล์ เปิดPRเข้าmainให้เจ้าของตรวจ ไม่merge/deploy
+- ผลตรวจรวม100testsผ่าน20.601วินาที Chromium5ขนาดมือถือ/ฟอร์มเบิกสว่างมืดผ่าน read-only23GET200 ไม่มีmigrationใหม่ รายละเอียดด้านล่าง
+
+## 14 พฤศจิกายน 2026 — local ตรง main ล่าสุดแล้ว พร้อมปรับดีไซน์
+
+- ล่าสุดปรับ chevron dropdown เส้น/หมุน และ native select สอดคล้องกัน CSS v20261114-07; แก้ Work location คำขอใหม่อิงโปรไฟล์แทน default HQ เปลี่ยนได้และไม่แก้โปรไฟล์ คำขอเดิมคงค่าเดิม 37tests/Chromiumคอมมือถือมืดสว่าง/read-only23GET200ผ่าน ยังไม่ push
+
+- สี SSO ล่าสุดเปลี่ยนเป็น gradient น้ำเงินเหมือน Login ตัวขาว คงปุ่มบาง44px/มือถือพอดีจอ CSS v20261114-06 browserผ่านซ้ำ ยังไม่ push
+
+- ล่าสุด SSO สีเดียวกับ AD tabs ฟ้าอมเทา มือถือย่อ hero ตามความสูงและระยะฟอร์ม ปุ่มหลักอยู่ในจอตั้งแต่320x568ถึง393x852โดยไม่เลื่อนตอนเปิดหน้า ช่องกรอก16pxกันiOSzoom เอา autofocus ออก CSS v20261114-05 browser5ขนาดผ่าน ไม่เปลี่ยนsecurityflow/ไม่ล็อกการเลื่อนตอนkeyboard ยังไม่ push
+
+- SSO ล่าสุดลดสูง44px กว้างเต็มฟอร์ม ฟ้าเข้มขึ้น #cfe5fc CSS v20261114-04 ปุ่มหลักเดิม Chromium 4ขนาดผ่าน ยังไม่ push
+
+- ปุ่ม login ล่าสุดผู้ใช้ให้ SSO ฟ้าอ่อน กว้าง/สูง52pxเท่าปุ่มหลัก คงปุ่มหลักสีน้ำเงิน จัดฟอร์มมือถือกลางพื้นที่ว่าง/ลดระยะ/safe-area CSS v20261114-03 Chromium 4 ขนาดตรวจขนาดปุ่มเท่ากันผ่าน ยังไม่ push
+
+- ดีไซน์ปุ่ม login ล่าสุด: ผู้ใช้ให้คืนปุ่ม AD/local สีน้ำเงินแบบเดิม ลด SSO เป็นปุ่มรองเส้นขอบบางขนาดเล็กสูง40pxจัดกลาง CSS v20261114-02 Chromium 1440/768/390/320 ผ่าน ยังไม่ push
+
+- ปรับดีไซน์ login SSO/mobile: SVG โทนน้ำเงิน ปุ่ม AD/local แบบเส้นขอบเมื่อมี SSO ลดช่องว่าง/hero ไม่ตัดรูปหรือทับข้อความ ปรับสวิตช์ CIAM/Break-Glass และลบ checkbox ที่ render ซ้ำบนกฎธุรกิจ เหลืออย่างละจุดเดียว CSS v20261114-01 ไม่เปลี่ยน authentication/security flow
+- 63 tests CIAM+core ผ่าน Chromium actual templates 1440/768/390/320 ผ่าน ดูภาพใน output/petty-ui-check/ciam-*20261114.png ยังไม่เปิด SSO local จริง/ไม่ส่งฟอร์ม/ไม่ push
+
+- sync local process-flow เป็น 115b981 ตรง origin/main (CIAM ของหัวหน้า PR#8 merge แล้ว) เก็บ local header alignment วันที่ 13 ไว้ครบ พร้อมสำรองไฟล์และ Git stash; บันทึกของหัวหน้าใน handoff/memory คงครบ
+- build image เพิ่ม PyJWT, backup DB output/sync-main-20261114/before-ciam-20261114.dump แล้ว migrate accounts0014/0015/core0028 local สำเร็จ recreate บริการเดิม ชุด accounts/CIAM 64 tests ผ่าน หน้า login200
+- ยังไม่ทดสอบ SSO จริง/ไม่ดึง keys VPS/ไม่ push/deploy/ไม่เปลี่ยน Webhook งาน local ที่ค้างยังเป็นโปรไฟล์-ออกจากระบบและ docs รอผู้ใช้บอกดีไซน์ที่จะปรับ
+
+## 13 พฤศจิกายน 2026 — ปรับหัวเว็บ local
+
+- ผู้ใช้คงค่าเริ่มต้นสว่างและจำโหมดต่อบัญชี ยืนยันสลับสว่างแล้ว refresh ยังสว่าง ไม่เปลี่ยนกฎธีม
+- จัดโปรไฟล์/ออกจากระบบให้ font/height/แนวเท่ากัน แก้ CSS ร่วมและ CSS version 20261113-01 Chromium คอม/มือถือ/สว่าง/มืดผ่าน คง logout POST ยังไม่ commit/push/deploy
+
+
 ## 13 พฤศจิกายน 2026 — รวมโค้ด main เข้ากับ Sec1 และแก้ Conflict ทั้ง 7 ไฟล์
 
 - **1. ตรวจสอบและผสานการทำงานระหว่าง main กับ Sec1:**

@@ -92,6 +92,30 @@ class DemoRequirementsTests(TestCase):
         self.assertIn('data-min-month="2026-11"', str(old['expense_month']))
         self.assertTrue(self.form('01/11/2026', expense_month='2026-11').is_valid())
 
+    def test_new_claim_location_comes_from_requester_profile(self):
+        for location in ('HQ', 'BRANCH'):
+            with self.subTest(location=location):
+                self.requester.work_location = location
+                form = ClaimRequestForm(requester=self.requester)
+                self.assertEqual(form['work_location'].value(), location)
+                self.assertFalse(form.fields['work_location'].disabled)
+
+    def test_location_can_be_overridden_without_changing_profile(self):
+        self.requester.work_location = 'BRANCH'
+        self.requester.save(update_fields=['work_location'])
+        form = self.form('05/11/2026', work_location='HQ')
+        self.assertTrue(form.is_valid(), form.errors)
+        claim = form.save()
+        self.assertEqual(claim.work_location, 'HQ')
+        self.requester.refresh_from_db()
+        self.assertEqual(self.requester.work_location, 'BRANCH')
+
+    def test_edit_retains_claim_location_even_if_profile_differs(self):
+        self.requester.work_location = 'BRANCH'
+        claim = self.claim(work_location='HQ')
+        form = ClaimRequestForm(instance=claim, requester=self.requester)
+        self.assertEqual(form['work_location'].value(), 'HQ')
+
     def test_saved_old_draft_cannot_bypass_five_day_submission_check(self):
         claim = self.claim(request_date=date(2026, 10, 30), expense_month=date(2026, 10, 1))
         self.clock.return_value = date(2026, 11, 6)

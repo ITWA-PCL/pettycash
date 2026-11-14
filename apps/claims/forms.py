@@ -50,7 +50,7 @@ class ClaimRequestForm(forms.ModelForm):
             # but deliberately leave the select enabled for an allowed override.
             if requester.supervisor_id:
                 self.initial["supervisor"] = requester.supervisor_id
-            self.initial.setdefault("work_location", requester.work_location if requester.work_location != User.WorkLocation.OTHER else '')
+            self.initial["work_location"] = requester.work_location if requester.work_location != User.WorkLocation.OTHER else ''
         if not eligible_supervisors.exists():
             self.fields["supervisor"].help_text = "ยังไม่มีผู้ใช้ที่มีสิทธิ์หัวหน้าผู้ขอ กรุณาให้ผู้ดูแลระบบกำหนดสิทธิ์ก่อน"
 
