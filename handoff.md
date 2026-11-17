@@ -1,5 +1,50 @@
 # บันทึกส่งต่องาน: Petty Cash
 
+## ปิดงาน 14 พฤศจิกายน 2026 — ผู้ใช้อนุมัติ push
+
+- ส่งสำเร็จ commit โค้ด 3cebc3a บน origin/process-flow เปิด PR #9 https://github.com/ITWA-PCL/pettycash/pull/9 เข้า main รอเจ้าของตรวจ ไม่มีการ merge/deploy งานนี้ บันทึกเลข PR เพิ่มเป็น commit เอกสาร
+
+- อนุมัติส่งงานค้างวันที่13–14: จัดแนวโปรไฟล์/ออกจากระบบ, login SSO โทนน้ำเงินแบบปุ่มหลักขนาดบาง44px, มือถือปรับตามความสูงจอให้ปุ่มหลักอยู่ใน viewport (ก่อนเปิดคีย์บอร์ด), สวิตช์ SSO/Break-Glass จุดเดียว, chevron dropdown และ Work location อิงโปรไฟล์/เปลี่ยนได้
+- ฐาน main ล่าสุด115b981 มี CIAM ของหัวหน้าอยู่ครบ ไม่แก้ protocol/endpoint/keys/นโยบาย security ส่งเฉพาะ8ไฟล์โค้ด/ทดสอบ/docs ไม่มี .env/DB/export/ภาพตัวอย่าง
+- ก่อนส่งตรวจชุดที่เกี่ยวข้องรวม100testsผ่าน20.601วินาที, Chromiumมือถือ5ขนาดปุ่มไม่จม พร้อมหน้าขอเบิกคอม/มือถือ/มืด/สว่าง, read-only audit23GET200, git diff check ผ่าน งานรอบนี้ไม่มี migration ใหม่
+- ตรวจ remote process-flow มี merge commit b76397e ที่เนื้อหาเหมือนฐาน7630801 ก่อนหน้านี้ จึงรวมประวัติ branch ตามปกติก่อน push ไม่ force push เปิด PR เข้า main เพื่อเจ้าของตรวจ ไม่ merge/deploy VPS/เปลี่ยน Webhook
+
+## 14 พฤศจิกายน 2026 — sync main ที่มี CIAM ของหัวหน้าแล้ว
+
+- ผู้ใช้ขอเช็กภายใน/ลูกศร dropdown/Work location: เปลี่ยนลูกศร searchable select จากอักขระเล็กเป็น chevron เส้น CSS จัดกึ่งกลางและหมุนเมื่อเปิด เพิ่มลูกศร SVG แบบเดียวกันให้ native single select รองรับมืด ไม่เปลี่ยนกลไกค้นหา/เลือก CSS v20261114-07
+- Work location แก้ ModelForm initial จาก setdefault เป็นค่าของ requester สำหรับคำขอใหม่ (model default HQ เคยมีอยู่ก่อนจึงไม่โดน setdefault ทับ) เลือก HQ/BRANCH ตามโปรไฟล์ และเปลี่ยนในคำขอได้โดยไม่แก้โปรไฟล์ คำขอเดิมคงสถานที่ที่บันทึกไว้ เพิ่ม regression 3 เคส
+- ชุด demo requirements+expense month/payer 37 tests ผ่าน; Chromium actual claim form จำลองโปรไฟล์ BRANCH ใน memory ตรวจเริ่มกาญจนบุรี เปลี่ยนเป็น HQ ส่ง FormData ถูก ลูกศรหมุน 1440/390/320 สว่าง/มืดไม่มีล้น/JS error CIAM mobile fit 5ขนาดผ่านซ้ำ; read-only audit 23GETทั้งหมด200 ไม่มี migration/ไฟล์อ้างอิงหาย ไม่ส่งฟอร์มหรือออกHTTPจริง ตัวอย่าง work-location-390-light-20261114.png ยังไม่ push
+
+- สี SSO ล่าสุดผู้ใช้ให้คล้าย Login: ใช้ gradient #0c5cbd → #1684df ตัวอักษรขาวเหมือนปุ่มหลัก คงสูง44pxและ layout มือถือที่ตรวจแล้ว CSS v20261114-06 browser5ขนาดปุ่มไม่จมผ่านซ้ำ ยังไม่ push
+
+- ล่าสุดผู้ใช้เน้นมือถือปุ่มต้องไม่จม: SSO เปลี่ยนเป็น var(--blue-100) ฟ้าอมเทา/ขอบบางให้เข้ากับ AD tabs สูง44pxกว้างเต็มเหมือนเดิม มือถือ hero ลด156px และ112pxเมื่อจอสูงไม่เกิน740px ลด gaps/paddingโดยปุ่มยังสูงอย่างน้อย44px ช่องกรอก16pxกัน iOS autozoom เอา autofocus ออกจาก username กันบังคับเลื่อนเมื่อเปิดหน้า คง autocomplete/required/SSO/security ทุกอย่าง CSS v20261114-05
+- Chromium ตรวจจริง template 390x844/393x852/375x667/360x640/320x568 เปิดหน้า scrollY=0 ปุ่มหลักอยู่ใน viewport ทุกขนาด ไม่ล้นแนวนอน พร้อมทดสอบ AD/local/password toggle/anti-bot fields/สวิตช์เดิมผ่าน ไม่จำลองคีย์บอร์ด Safari จริง ไม่ล็อก overflow เพื่อให้ยังเลื่อนได้ตอนมีคีย์บอร์ด/ข้อความ error ตัวอย่าง ciam-login-fit-390x844-20261114.png และ ciam-login-fit-320x568-20261114.png ยังไม่ push
+
+- ปรับ SSO ล่าสุดให้บางลงสูง44px (กว้างเท่าปุ่มหลัก) ฟ้าเข้มขึ้น #cfe5fc/hover#bddbf9 ปุ่มหลักเดิม CSS v20261114-04 Chromium 4ขนาดผ่าน ยังไม่ push
+
+- จัดกลางฟอร์มบนมือถือในแนวนอน เว้นเหนือฟอร์มเพียง20px ไม่ center แนวตั้งจนเกิดช่องขาวกว้างและดันปุ่มหลักลงต่ำ
+
+- ดีไซน์ login ล่าสุดอีกครั้งตามผู้ใช้: SSO พื้นฟ้าอ่อน ตัวอักษรน้ำเงิน กว้างเต็มฟอร์ม/สูง52pxเท่าปุ่ม AD/local ซึ่งคงสีน้ำเงินเดิม จัด panel มือถือกึ่งกลางพื้นที่ว่าง ลด gap และรองรับ safe-area iPhone จอ320ลดฟอนต์ปุ่มหลักกันตัดสองบรรทัด CSS v20261114-03 ตรวจ Chromium 1440/768/390/320 ยืนยันขนาดและแนวปุ่มทั้งสองเท่ากัน ไม่มีล้น ยังไม่ push
+
+- ปรับดีไซน์ปุ่ม login ล่าสุดตามผู้ใช้: คืนปุ่มเข้าสู่ระบบหลัก AD/local เป็น gradient สีน้ำเงิน/เงา/ขนาดเดิม เอา override แบบเส้นขอบออก ลด SSO เป็นปุ่มรองเส้นขอบบาง พื้นโปร่ง สูง 40px ความกว้างตามเนื้อหา จัดกลาง ไอคอน/ฟอนต์เล็กลง CSS v20261114-02 ตรวจ Chromium ทั้ง 4 ขนาดผ่านซ้ำ ยังไม่ push
+
+- ปรับดีไซน์ตามรูปผู้ใช้: ปุ่ม login SSO ใช้ SVG shield/arrow แทน emoji โทนน้ำเงินเดียวกับระบบ เอา inline style ออก จัดระยะ divider และฟอร์มให้กระชับ เมื่อมี SSO ให้ปุ่ม AD/local เป็นแบบเส้นขอบเพื่อแยกน้ำหนัก; มือถือลด hero เหลือขั้นต่ำ 200px จัดรูปให้อยู่ในกรอบไม่ทับข้อความและปรับระยะฟอร์ม/ปุ่ม
+- หน้า system_settings พบ ciam_sso_enabled/ciam_break_glass_active ถูก render ซ้ำทั้ง generic business fields และสวิตช์ CIAM จึงยกเว้นสองช่องจาก generic loop เหลือสวิตช์เดิมใน CIAM จุดเดียว จัดข้อความ/สี amber ของ Break-Glass/mobile overflow CSS version 20261114-01 ไม่แก้ forms/views/SSO endpoints/เงื่อนไข login
+- ตรวจ CIAM+core 63 tests ผ่าน Chromium actual templates 1440/768/390/320px ไม่ล้น ไม่ทับ hero, AD/local/password toggle/timing guard/honeypot อยู่ครบ SSO href เดิม สวิตช์อย่างละ 1 ช่องและสลับได้ ไม่ส่งฟอร์มจริง ตัวอย่าง output/petty-ui-check/ciam-login-390-20261114.png และ ciam-settings-390-20261114.png; preview ใช้ flag ใน memory และ read-only DB ไม่เปิด SSO หรือแก้ค่าเชื่อมต่อจริง ยังไม่ commit/push/deploy
+
+- ผู้ใช้ขอให้ local ตรงกับงานที่หัวหน้า merge ก่อนปรับดีไซน์: fetch main/process-flow พบ main ล่าสุด 115b981 (merge PR#8 Sec1) มี Central IAM/SSO/M2M, password rotation/complexity, bot defense, หน้า login และตั้งค่าใหม่; origin/process-flow ยัง b76397e
+- สำรองงานจัดแนวโปรไฟล์/ออกจากระบบ 4 ไฟล์ไว้ output/sync-main-20261114 และ Git stash ชื่อ Preserve local header alignment before CIAM main sync 2026-11-14 จากนั้น fast-forward local process-flow ไป 115b981 ตรง origin/main ไม่มีการแก้ security flow ของหัวหน้า นำ CSS/base และบันทึกวันที่ 13 กลับโดยเก็บบันทึกของหัวหน้าครบ
+- อัปเดต image local จาก requirements ใหม่ที่เพิ่ม PyJWT สำรอง PostgreSQL ก่อน migration เป็น output/sync-main-20261114/before-ciam-20261114.dump (128275 bytes, อยู่นอก Git) ใช้ accounts.0014/0015 และ core.0028 สำเร็จ แล้ว recreate web/daily-reminders/log-cleanup ด้วย image ใหม่
+- ทดสอบ apps.accounts 64 tests ผ่าน (รวม CIAM 32 tests) ฐานทดสอบแยก; local /login/ HTTP200; diff check ผ่าน ไม่ได้ทดสอบ SSO จริงกับ CIAM หรือคัดลอก key/ค่าจริงจาก VPS ไม่เปลี่ยน Webhook ไม่ push/deploy รอผู้ใช้ระบุจุดดีไซน์
+- งานยังไม่ commit: จัดแนวโปรไฟล์/ออกจากระบบเดิม + handoff/memory เท่านั้น โค้ด CIAM เป็นงาน main ของหัวหน้าที่ดึงมาแล้ว
+
+## 13 พฤศจิกายน 2026 — จัดแนวโปรไฟล์/ออกจากระบบ (local ยังไม่ push)
+
+- ผู้ใช้แจ้งหลัง merge หน้าเว็บเป็นมืด ตรวจ main และหน้า login VPS (release 325c03e) ไม่ได้บังคับมืด ผู้ใช้ยืนยันเปลี่ยนสว่างแล้ว refresh ยังสว่าง จึงคงค่าเริ่มต้น LIGHT และจำการเลือกต่อบัญชีตามเดิม ไม่แก้ theme หรือข้อมูลผู้ใช้
+- ปรับโปรไฟล์/ออกจากระบบ: เดิมลิงก์ .88rem แต่ปุ่ม inherit 16px ทำให้ขนาดไม่เท่ากัน ใช้กฎร่วม font/weight/line-height/min-height 38px/inline-flex จัดกึ่งกลาง และจัด form ให้ตรงแนว อัปเดต CSS version 20261113-01 คง logout POST และพฤติกรรมมือถือเดิม
+- Chromium ตรวจหัวเว็บจริงจาก template: 1440/520/390/360px โหมดสว่าง/มืด ขนาดฟอนต์/น้ำหนัก/ความสูง/แนวตั้งตรงกัน รูปตัวอย่าง output/petty-ui-check/header-actions-20261113-*; diff check ผ่าน ยังไม่ commit/push/deploy
+
+
 ## 13 พฤศจิกายน 2026 — พัฒนาระบบความปลอดภัยตามมาตรฐาน Central IAM v2.12.0 ครบทั้ง 5 ด้าน
 
 - **1. นโยบายรหัสผ่านท้องถิ่น 90 วันและความซับซ้อน (หมวด G / ข้อกำหนด 13) — เฉพาะ Local Account:**

@@ -11,7 +11,7 @@
   {% csrf_token %}
   <section class="card user-form-card"><h2>กฎการดำเนินงาน</h2>
     <div class="form-grid">
-      {% for field in form %}{% if field.name not in form.integration_names and field.name != 'ad_enabled' and field.name != 'ciam_enabled' and field.name != 'telegram_enabled' and field.name != 'require_signature_on_first_login' and field.name != 'claim_print_enabled' and field.name != 'auto_receive_enabled' and field.name != 'auto_receive_after_days' and field.name != 'petty_receive_after_days' and field.name != 'maintenance_mode' and field.name != 'maintenance_message' and field.name != 'log_retention_days' %}
+      {% for field in form %}{% if field.name not in form.integration_names and field.name != 'ad_enabled' and field.name != 'ciam_enabled' and field.name != 'ciam_sso_enabled' and field.name != 'ciam_break_glass_active' and field.name != 'telegram_enabled' and field.name != 'require_signature_on_first_login' and field.name != 'claim_print_enabled' and field.name != 'auto_receive_enabled' and field.name != 'auto_receive_after_days' and field.name != 'petty_receive_after_days' and field.name != 'maintenance_mode' and field.name != 'maintenance_message' and field.name != 'log_retention_days' %}
       <div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>
       {% endif %}{% endfor %}
     </div>
@@ -76,9 +76,9 @@
         </ul>
       </div>
 
-      <div class="setting-row" style="margin-top: 1rem;">
+      <div class="setting-row ciam-switch-row">
         <div>
-          <strong>สถานะ Single Sign-On (SSO Enforcement)</strong>
+          <strong>เข้าสู่ระบบด้วย SSO</strong>
           <small>เมื่อเปิด จะแสดงปุ่มเข้าสู่ระบบด้วย Window Asia SSO บนหน้า Login ให้พนักงานเข้าใช้งาน</small>
         </div>
         <label class="switch-control" for="{{ form.ciam_sso_enabled.id_for_label }}">
@@ -88,9 +88,9 @@
         </label>
       </div>
 
-      <div class="setting-row" style="background: rgba(245, 158, 11, 0.08); padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.25); margin-top: 0.75rem;">
+      <div class="setting-row ciam-switch-row ciam-emergency-row">
         <div>
-          <strong style="color: #d97706;">⚠️ โหมดฉุกเฉิน Break-Glass (Emergency Mode)</strong>
+          <strong>โหมดฉุกเฉิน Break-Glass</strong>
           <small>เมื่อเปิด จะระงับ SSO ชั่วคราว และบังคับให้พนักงานล็อกอินด้วยรหัสผ่านตรงผ่าน AD Gateway หรือ Local Admin</small>
         </div>
         <label class="switch-control" for="{{ form.ciam_break_glass_active.id_for_label }}">

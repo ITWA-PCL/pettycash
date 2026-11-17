@@ -44,16 +44,13 @@
         {% endif %}
 
         {% if sso_enabled and not break_glass_active %}
-          <!-- SSO Initiation Option (Top) -->
-          <div class="sso-launch-wrap" style="margin-bottom: 1rem;">
-            <a href="{% url 'sso_login_redirect' %}" class="button" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.65rem 1rem; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #2563eb, #4f46e5); color: #ffffff; border: none; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); cursor: pointer; transition: transform 0.15s ease;">
-              <span>🛡️ เข้าสู่ระบบด้วย Window Asia SSO ✨</span>
+          <div class="sso-launch-wrap">
+            <a href="{% url 'sso_login_redirect' %}" class="login-sso-button">
+              <svg class="sso-shield" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 3v5c0 5-4 8-8 10-4-2-8-5-8-10V6l8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+              <span>เข้าสู่ระบบด้วย Window Asia SSO</span>
+              <svg class="sso-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
             </a>
-            <div style="display: flex; align-items: center; text-align: center; margin: 1rem 0; color: #94a3b8; font-size: 0.75rem;">
-              <span style="flex: 1; border-bottom: 1px solid rgba(148, 163, 184, 0.25);"></span>
-              <span style="padding: 0 0.75rem;">หรือเข้าสู่ระบบด้วยชื่อผู้ใช้งาน</span>
-              <span style="flex: 1; border-bottom: 1px solid rgba(148, 163, 184, 0.25);"></span>
-            </div>
+            <div class="login-method-divider"><span>หรือใช้ชื่อผู้ใช้และรหัสผ่าน</span></div>
           </div>
         {% endif %}
 
@@ -84,7 +81,7 @@
           <label for="id_username">ชื่อผู้ใช้</label>
           <div class="input-wrap">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0m8-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg>
-            <input id="id_username" name="username" type="text" autocomplete="username" autofocus required placeholder="กรอกชื่อผู้ใช้">
+            <input id="id_username" name="username" type="text" autocomplete="username" required placeholder="กรอกชื่อผู้ใช้">
           </div>
         </div>
 
