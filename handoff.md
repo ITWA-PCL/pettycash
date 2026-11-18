@@ -27,7 +27,7 @@
      - **ไฟล์ที่เปลี่ยน/เพิ่ม:** `apps/accounts/password_policy.py`, `config/settings.py`, `apps/accounts/models.py`, `apps/accounts/middleware.py`, `apps/core/middleware.py`, `apps/accounts/forms.py`, `apps/accounts/views.py`, `apps/accounts/admin.py`, `apps/accounts/management/__init__.py`, `apps/accounts/management/commands/__init__.py`, `apps/accounts/management/commands/audit_local_passwords.py`, `apps/accounts/tests_security_ciam.py`, `handoff.md`, `memory.md`
      - **ผลตรวจ:** `manage.py check` ผ่าน, `makemigrations --check --dry-run` (`No changes detected`), `git diff --check` ผ่าน, `apps.accounts` ผ่าน **72/72 tests** (รวม `LocalPasswordPolicyHardeningTests` 8/8 ครอบคลุมวันที่ 89/90, legacy `None`, รหัสผิดทุกเงื่อนไข, รหัสเดิมซ้ำ, create/change/reset UI+Admin, session invalidation, API ก่อน/หลังหมดอายุ, ข้อยกเว้น change/logout, AD และ integration regression)
      - **ภาพรวมทั้งโปรเจกต์:** บน Windows/SQLite ผ่าน **396/401 tests** (`apps.accounts` 72/72 และ `apps.core` ผ่านทั้งหมด; 5 errors ใน `apps.claims` เป็นข้อจำกัด Windows/SQLite ของเทส Dev เดิม 3 เคส `sqlite3.OperationalError: database table is locked` และ 2 เคส Windows `PermissionError [WinError 32]` บน `TemporaryDirectory` ของ `FileResponse`); ยืนยันรัน 3 เคส concurrency ของ `apps.claims` บน PostgreSQL 17 (`postgres:17-alpine`) แยกเฉพาะกิจ **ผ่าน 3/3 (2.186s)**
-     - **ส่งมอบ:** Push เฉพาะ branch `Sec1` และเปิด Pull Request เข้า `main` สำหรับรอพี่โอ๊ต review (ยังไม่ merge และยังไม่ deploy)
+     - **ส่งมอบ:** Push เฉพาะ branch `Sec1` (commit `c451872`) และเปิด PR #10: https://github.com/ITWA-PCL/pettycash/pull/10 เข้า `main` สำหรับรอพี่โอ๊ต review (ยังไม่ merge และยังไม่ deploy)
 
 ## ปิดงาน 14 พฤศจิกายน 2026 — ผู้ใช้อนุมัติ push
 
