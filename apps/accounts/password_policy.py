@@ -66,13 +66,30 @@ def validate_password_complexity(
     return None
 
 
+def _run_standard_django_validators(password: str, user: Optional[Any] = None) -> None:
+    """Run configured Django validators excluding LocalPasswordPolicyValidator to avoid recursion."""
+    from django.contrib.auth.password_validation import get_default_password_validators
+
+    errors = []
+    for validator in get_default_password_validators():
+        if isinstance(validator, LocalPasswordPolicyValidator):
+            continue
+        try:
+            validator.validate(password, user)
+        except ValidationError as error:
+            errors.extend(error.error_list)
+    if errors:
+        raise ValidationError(errors)
+
+
 def validate_local_password(
     password: str,
     user: Optional[Any] = None,
     username: Optional[str] = None,
     forbid_current_password: bool = True,
+    run_django_validators: bool = True,
 ) -> None:
-    """Validate local password complexity and raise Django ValidationError on failure."""
+    """Validate local password complexity and standard Django weak-password checks."""
     err = validate_password_complexity(
         password,
         username=username,
@@ -81,6 +98,8 @@ def validate_local_password(
     )
     if err:
         raise ValidationError(err, code="password_policy")
+    if run_django_validators:
+        _run_standard_django_validators(password, user)
 
 
 class LocalPasswordPolicyValidator:
@@ -94,6 +113,7 @@ class LocalPasswordPolicyValidator:
             user=user,
             username=getattr(user, "username", None) if user is not None else None,
             forbid_current_password=True,
+            run_django_validators=False,
         )
 
     def get_help_text(self) -> str:

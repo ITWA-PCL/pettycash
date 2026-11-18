@@ -11,7 +11,7 @@ from PIL import Image
 
 from apps.core.models import BusinessUnit
 from .models import User
-from .password_policy import apply_local_password, validate_local_password, validate_password_complexity
+from .password_policy import apply_local_password, validate_local_password
 from .roles import ACCOUNTANT, ACCOUNTING_APPROVER, REQUESTER, ROLE_NAMES, SUPERVISOR_APPROVER
 
 
@@ -228,14 +228,36 @@ class UserManagementForm(forms.ModelForm):
             self.add_error("password", "กรุณากำหนดรหัสผ่านสำหรับบัญชีภายในระบบ")
         elif password and not is_ad:
             target_user = self.instance if self.instance and self.instance.pk else None
-            err = validate_password_complexity(
-                password,
-                username=username,
-                user=target_user,
-                forbid_current_password=bool(target_user),
-            )
-            if err:
-                self.add_error("password", err)
+            if target_user is not None:
+                candidate_user = User(
+                    pk=target_user.pk,
+                    username=username,
+                    first_name=cleaned_data.get("first_name", target_user.first_name) or "",
+                    last_name=cleaned_data.get("last_name", target_user.last_name) or "",
+                    email=cleaned_data.get("email", target_user.email) or "",
+                    password=target_user.password,
+                    is_ad_auth=False,
+                    auth_source=User.AuthSource.LOCAL,
+                )
+            else:
+                candidate_user = User(
+                    username=username,
+                    first_name=cleaned_data.get("first_name", "") or "",
+                    last_name=cleaned_data.get("last_name", "") or "",
+                    email=cleaned_data.get("email", "") or "",
+                    is_ad_auth=False,
+                    auth_source=User.AuthSource.LOCAL,
+                )
+            try:
+                validate_local_password(
+                    password,
+                    user=candidate_user,
+                    username=username,
+                    forbid_current_password=bool(target_user),
+                    run_django_validators=True,
+                )
+            except ValidationError as exc:
+                self.add_error("password", exc)
         roles = cleaned_data.get("groups")
         if roles and REQUESTER in set(roles.values_list("name", flat=True)):
             for field_name in ("supervisor", "accounting_manager", "accountant"):

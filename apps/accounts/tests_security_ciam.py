@@ -5,6 +5,8 @@ from io import StringIO
 from unittest.mock import MagicMock, patch
 
 from django.contrib.admin.models import LogEntry
+from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import PBKDF2PasswordHasher
 from django.contrib.auth.models import Group
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.sessions.models import Session
@@ -934,13 +936,13 @@ class LocalPasswordPolicyHardeningTests(TestCase):
 
         # Service integration 1: M2M directory API with X-Management-API-Key works even if session is expired
         cfg = SystemSettings.objects.get(pk=1)
-        cfg.ciam_m2m_key = "m2m_key_valid_123"
+        cfg.ciam_m2m_key = "test_management_api_key_valid"
         cfg.save(update_fields=["ciam_m2m_key"])
         self.admin.password_changed_at = timezone.now() - timedelta(days=120)
         self.admin.save(update_fields=["password_changed_at"])
         m2m_res = self.client.get(
             reverse("ciam_directory_accounts_api"),
-            HTTP_X_MANAGEMENT_API_KEY="m2m_key_valid_123",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
         )
         self.assertEqual(m2m_res.status_code, 200)
 
@@ -995,3 +997,168 @@ class LocalPasswordPolicyHardeningTests(TestCase):
         # Ensure command did not fabricate password_changed_at on legacy user
         legacy.refresh_from_db()
         self.assertIsNone(legacy.password_changed_at)
+
+    def test_password_hash_upgrade_preserves_expiry_and_must_change_flag(self):
+        old_hash = PBKDF2PasswordHasher().encode("OldValidPass26!", "legacyhashsalt", iterations=100000)
+
+        # Case 1: 100-day expired account undergoes hash upgrade during login/verification
+        expired_ts = timezone.now() - timedelta(days=100)
+        expired_user = User.objects.create_user(
+            username="rehashexpired",
+            password=None,
+            is_active=True,
+            password_changed_at=expired_ts,
+            must_change_password=False,
+            signature="signatures/rehashexpired.png",
+        )
+        User.objects.filter(pk=expired_user.pk).update(password=old_hash)
+        expired_user.refresh_from_db()
+        self.assertEqual(expired_user.password, old_hash)
+
+        authed = authenticate(username="rehashexpired", password="OldValidPass26!")
+        self.assertIsNotNone(authed)
+        expired_user.refresh_from_db()
+        self.assertNotEqual(expired_user.password, old_hash)
+        self.assertEqual(expired_user.password_changed_at, expired_ts)
+        self.assertFalse(expired_user.must_change_password)
+        self.assertEqual(expired_user.check_password_expired(), (True, 0))
+
+        client_exp = Client()
+        client_exp.post(reverse("login"), {
+            "username": "rehashexpired",
+            "password": "OldValidPass26!",
+            "login_mode": "local",
+        })
+        self.assertRedirects(client_exp.get(reverse("dashboard")), reverse("forced_password_change"))
+        self.assertEqual(client_exp.get(reverse("notification_feed")).status_code, 403)
+
+        # Case 2: Forced-reset account (must_change_password=True) undergoes hash upgrade on login
+        reset_ts = timezone.now() - timedelta(days=2)
+        reset_user = User.objects.create_user(
+            username="rehashreset",
+            password=None,
+            is_active=True,
+            password_changed_at=reset_ts,
+            must_change_password=True,
+            signature="signatures/rehashreset.png",
+        )
+        User.objects.filter(pk=reset_user.pk).update(password=old_hash)
+        reset_user.refresh_from_db()
+
+        client_rst = Client()
+        login_res = client_rst.post(reverse("login"), {
+            "username": "rehashreset",
+            "password": "OldValidPass26!",
+            "login_mode": "local",
+        })
+        self.assertRedirects(login_res, reverse("dashboard"), fetch_redirect_response=False)
+
+        reset_user.refresh_from_db()
+        self.assertNotEqual(reset_user.password, old_hash)
+        self.assertEqual(reset_user.password_changed_at, reset_ts)
+        self.assertTrue(reset_user.must_change_password)
+        self.assertEqual(reset_user.check_password_expired(), (True, 0))
+        self.assertRedirects(client_rst.get(reverse("dashboard")), reverse("forced_password_change"))
+        api_res = client_rst.get(reverse("notification_feed"))
+        self.assertEqual(api_res.status_code, 403)
+        self.assertEqual(api_res.json()["error_code"], "PASSWORD_CHANGE_REQUIRED")
+        self.assertEqual(api_res.json()["reason"], "must_change_password")
+
+    def test_common_and_user_attribute_similar_passwords_rejected_across_channels(self):
+        emp = User.objects.create_user(
+            username="emp901",
+            first_name="Somchai",
+            last_name="Jaidee",
+            email="somchai.wa@example.com",
+            password="CurrentStrong26!",
+            is_active=True,
+            password_changed_at=timezone.now(),
+            signature="signatures/emp901.png",
+        )
+
+        # Both passwords satisfy complexity rules (8-16, upper, lower, digit, special, no username),
+        # so they must be rejected by CommonPasswordValidator and UserAttributeSimilarityValidator.
+        weak_cases = (
+            ("common", "Password1!"),
+            ("similar_to_profile", "Somchai99!"),
+        )
+
+        for case_name, weak_pwd in weak_cases:
+            with self.subTest(channel="auth_validator", case=case_name):
+                with self.assertRaises(ValidationError):
+                    validate_password(weak_pwd, emp)
+
+            with self.subTest(channel="profile", case=case_name):
+                self.client.force_login(emp)
+                res = self.client.post(reverse("signature_setup"), {
+                    "action": "password",
+                    "password": weak_pwd,
+                })
+                self.assertEqual(res.status_code, 200)
+                self.assertIn("password", res.context["password_form"].errors)
+                emp.refresh_from_db()
+                self.assertTrue(emp.check_password("CurrentStrong26!"))
+
+            with self.subTest(channel="forced_change", case=case_name):
+                res = self.client.post(reverse("forced_password_change"), {
+                    "old_password": "CurrentStrong26!",
+                    "new_password": weak_pwd,
+                    "confirm_password": weak_pwd,
+                })
+                self.assertEqual(res.status_code, 200)
+                self.assertIn("new_password", res.context["form"].errors)
+                emp.refresh_from_db()
+                self.assertTrue(emp.check_password("CurrentStrong26!"))
+
+            self.client.force_login(self.admin)
+            with self.subTest(channel="ui_create", case=case_name):
+                res = self.client.post(reverse("user_create"), {
+                    "username": "emp902",
+                    "first_name": "Somchai",
+                    "last_name": "Jaidee",
+                    "email": "somchai.wa@example.com",
+                    "work_location": User.WorkLocation.HEAD_OFFICE,
+                    "password": weak_pwd,
+                    "is_active": "on",
+                })
+                self.assertEqual(res.status_code, 200)
+                self.assertIn("password", res.context["form"].errors)
+                self.assertFalse(User.objects.filter(username="emp902").exists())
+
+            with self.subTest(channel="ui_edit_reset", case=case_name):
+                res = self.client.post(reverse("user_edit", args=[emp.pk]), {
+                    "username": emp.username,
+                    "first_name": emp.first_name,
+                    "last_name": emp.last_name,
+                    "email": emp.email,
+                    "work_location": User.WorkLocation.HEAD_OFFICE,
+                    "password": weak_pwd,
+                    "is_active": "on",
+                })
+                self.assertEqual(res.status_code, 200)
+                self.assertIn("password", res.context["form"].errors)
+                emp.refresh_from_db()
+                self.assertTrue(emp.check_password("CurrentStrong26!"))
+
+            with self.subTest(channel="django_admin_password_change", case=case_name):
+                res = self.client.post(reverse("admin:auth_user_password_change", args=[emp.pk]), {
+                    "usable_password": "true",
+                    "password1": weak_pwd,
+                    "password2": weak_pwd,
+                })
+                self.assertEqual(res.status_code, 200)
+                self.assertIn("password2", res.context["adminForm"].form.errors)
+                emp.refresh_from_db()
+                self.assertTrue(emp.check_password("CurrentStrong26!"))
+
+        # Also verify Django Admin user creation rejects CommonPasswordValidator ("Password1!")
+        self.client.force_login(self.admin)
+        res_adm_create = self.client.post(reverse("admin:accounts_user_add"), {
+            "username": "emp903",
+            "usable_password": "true",
+            "password1": "Password1!",
+            "password2": "Password1!",
+        })
+        self.assertEqual(res_adm_create.status_code, 200)
+        self.assertIn("password2", res_adm_create.context["adminform"].form.errors)
+        self.assertFalse(User.objects.filter(username="emp903").exists())

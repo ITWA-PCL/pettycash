@@ -84,9 +84,25 @@ class User(AbstractUser):
         super().__init__(*args, **kwargs)
         self._password_changed_at_explicit = password_changed_at_explicit
 
+    def check_password(self, raw_password) -> bool:
+        """
+        Verify raw_password against the stored hash.
+        Preserve password_changed_at and must_change_password when Django
+        upgrades the password hash in-place (rehash) during verification.
+        """
+        orig_changed_at = self.password_changed_at
+        orig_must_change = self.must_change_password
+        self._is_rehashing = True
+        try:
+            return super().check_password(raw_password)
+        finally:
+            self._is_rehashing = False
+            self.password_changed_at = orig_changed_at
+            self.must_change_password = orig_must_change
+
     def set_password(self, raw_password) -> None:
         super().set_password(raw_password)
-        if raw_password is not None:
+        if raw_password is not None and not getattr(self, "_is_rehashing", False):
             self.password_changed_at = timezone.now()
             self.must_change_password = False
             self._password_changed_at_explicit = True
@@ -102,7 +118,7 @@ class User(AbstractUser):
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             fields_set = set(update_fields)
-            if "password" in fields_set:
+            if "password" in fields_set and not getattr(self, "_is_rehashing", False):
                 fields_set.update({"password_changed_at", "must_change_password"})
                 kwargs["update_fields"] = list(fields_set)
 
