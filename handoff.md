@@ -1,5 +1,34 @@
 # บันทึกส่งต่องาน: Petty Cash
 
+## 18 พฤศจิกายน 2026 — อัปเกรดระบบรองรับ Central IAM Standard v2.13.0 (Sec1)
+
+- **ขอบเขตงาน & ฐานโค้ด:**
+  - พัฒนาต่อบน branch `Sec1` (ไม่มี Schema Migration ใหม่: `makemigrations --check --dry-run` = `No changes detected`) เพื่อยกระดับการเชื่อมต่อ Central IAM จาก v2.12.0 เป็น **v2.13.0** (One-Way AD Governance, Local Account Initial Password Provisioning, Strict Real DB Persistence และ Framework Version Handshake; เว้นหมวด E In-App AI Copilot เนื่องจาก PettyCash ยังไม่มีหน้าต่างแชท AI)
+
+- **รายการปรับปรุงที่ดำเนินการ:**
+  1. **Framework Version Handshake (`2.13.0`):**
+     - ส่ง `"framework_version": "2.13.0"` ใน `GET /api/auth/sso/config/` (`apps/accounts/views.py`), `GET /api/v1/directory/accounts/` และ `/api/directory/accounts` (ทั้งใน JSON และ Header `X-CIAM-Framework-Version`), และใน payload ของ `POST /api/v1/agent/heartbeat` (`apps/core/ciam_agent.py`)
+  2. **Group B & SSO Audit Enhancements (`apps/accounts/views.py`, `apps/accounts/ciam_sso.py`):**
+     - `sso_authorize_url_view` (`/api/auth/sso/authorize-url/`): ตรวจสอบ `ciam_sso_enabled` และ `ciam_break_glass_active` (คืน HTTP `503` เมื่อปิดหรืออยู่ในโหมด Break-Glass) และรองรับ `redirect_uri` ทั้งแบบ Form และ JSON
+     - `exchange_code_and_login`: บันทึก `ciam_origin_ip` และ `browser_ip`/`client_ip` (สกัด IP แรกจาก `X-Forwarded-For`) ลงใน `TransactionLog`
+     - `sso_break_glass_toggle` (`/api/auth/sso/break-glass-toggle/`): รองรับ JSON body (`break_glass_active`, `reason`), บันทึก `prev_state` และ `reason` ใน `TransactionLog`, และส่งแจ้งเตือน Telegram เมื่อตั้งค่าไว้
+  3. **Group C Inbound Directory & Real DB Persistence (`apps/accounts/views.py`, `apps/accounts/middleware.py`, `config/urls.py`):**
+     - เพิ่ม Fallback routes `/api/directory/accounts` และ `/api/directory/accounts/<username>/status` คู่กับ `/api/v1/...` และขยายการยกเว้นใน `PasswordRotationMiddleware._is_m2m_directory_request` (เฉพาะเมื่อส่ง `X-Management-API-Key`)
+     - ตรวจสอบ `X-Management-API-Key` ร่วมกับ Origin IP Whitelist (`X-CIAM-Origin-IP` → `X-Origin-IP` → `X-Forwarded-For` → `REMOTE_ADDR`, รองรับ `157.173.219.153`, Loopback, `172.18.0.1`, Office WANs และ `ad_origin_ip`)
+     - `GET /api/v1/directory/accounts`: คืน `application_name`, `framework_version`, `total_accounts`, `active_accounts`, `inactive_accounts`, ข้อมูลบัญชีครบฟิลด์ (`id`, `group_name`, `telegram_chat_id`, `last_login_at`, `created_at`, `updated_at`) และรองรับ filter `status`, `department`, `search`
+     - `POST /api/v1/directory/accounts` (`@csrf_exempt`): สร้างและ commit บัญชีจริงลงตาราง User (`201 Created`, ตอบ `409 Conflict` เมื่อชื่อซ้ำ case-insensitive) รองรับทั้ง One-Way AD (`use_ad_auth=true`) และ Local Account (`use_ad_auth=false` พร้อม Hash `password` และตั้ง `must_change_password`, บังคับสิทธิ์เริ่มต้น Least Privilege ไม่ตั้งเป็น `ผู้ดูแลระบบ`, และไม่บันทึกรหัสผ่านลง Log)
+     - `PATCH /api/v1/directory/accounts/<username>/status` (`@csrf_exempt`): เปิด/ปิดสิทธิ์บัญชี, ป้องกันบัญชีใน `PROTECTED_ACCOUNTS` / `is_superuser` / ผู้ดูแลระบบคนสุดท้าย (`403`), และตัด active sessions ทันทีผ่าน `invalidate_user_sessions`
+  4. **Mode C Outbound Agent (`apps/core/ciam_agent.py`):**
+     - รวมศูนย์ `provision_ciam_user` ใช้ร่วมกันระหว่าง `execute_local_command("PROVISION_USER", ...)` และ `POST /api/v1/directory/accounts`
+     - อัปเดต `run_agent_cycle` ให้ดึง `assigned_accounts` จาก Response เพื่อส่ง metadata (`use_ad_auth`, `full_name`, `email`, `department`, `role`, `password`, `must_change_password`) และอัปเดต `DISABLE_USER` ให้เรียก `invalidate_user_sessions(user)` ทันที
+
+- **ผลตรวจหลังแก้ไขทั้งหมด (ในเครื่อง Windows / SQLite, `.venv\Scripts\python.exe`):**
+  - `manage.py check`: ผ่าน (0 issues)
+  - `manage.py makemigrations --check --dry-run`: `No changes detected`
+  - `manage.py test apps.accounts.tests_security_ciam -v 2`: ผ่าน **45/45 tests** (`161.843s`)
+  - `manage.py test apps.accounts apps.core -v 2`: ผ่าน **177/177 tests** (`314.090s`)
+  - `git diff --check`: ผ่าน (ไม่มีปัญหา whitespace); ยังไม่ commit/push (รอคำสั่งผู้ใช้บน branch `Sec1`)
+
 ## 18 พฤศจิกายน 2026 — อุดช่องว่าง Local Password Policy ของ Pettycash (Sec1)
 
 - **ฐานโค้ดและขอบเขตงาน:**
@@ -29,8 +58,12 @@
        - **P2 (`config/settings.py`, `apps/accounts/password_policy.py`, `apps/accounts/forms.py`):** คง `AUTH_PASSWORD_VALIDATORS` เดิมทั้ง 4 ตัว (`UserAttributeSimilarityValidator`, `MinimumLengthValidator`, `CommonPasswordValidator`, `NumericPasswordValidator`) ร่วมกับ `LocalPasswordPolicyValidator` และเรียกใช้ทุกช่องทางผ่าน `validate_local_password` (ป้องกัน `"Password1!"` และรหัสคล้ายข้อมูลส่วนตัวผู้ใช้)
        - **CI Secret Scan (`apps/accounts/tests_security_ciam.py`, `.gitleaksignore`):** เปลี่ยน dummy M2M key ในเทสเป็น `"test_management_api_key_valid"` และเพิ่ม `.gitleaksignore` เฉพาะ 2 fingerprint ของ test fixture ใน commit `c451872` โดยไม่ปิด scanner ทั้งชุด
      - **ไฟล์ที่เปลี่ยน/เพิ่ม:** `apps/accounts/password_policy.py`, `config/settings.py`, `apps/accounts/models.py`, `apps/accounts/middleware.py`, `apps/core/middleware.py`, `apps/accounts/forms.py`, `apps/accounts/views.py`, `apps/accounts/admin.py`, `apps/accounts/management/__init__.py`, `apps/accounts/management/commands/__init__.py`, `apps/accounts/management/commands/audit_local_passwords.py`, `apps/accounts/tests_security_ciam.py`, `.gitleaksignore`, `handoff.md`, `memory.md`
-     - **ผลตรวจล่าสุด:** `manage.py check` ผ่าน, `makemigrations --check --dry-run` (`No changes detected`), `git diff --check` ผ่าน, `apps.accounts` ผ่าน **74/74 tests** (รวม `LocalPasswordPolicyHardeningTests` 10/10 ครอบคลุม rehash P1 ทั้งกรณีหมดอายุ 100 วันและ `must_change_password=True`, รหัสยอดนิยม `"Password1!"`/ข้อมูลคล้ายผู้ใช้ P2 ทุกช่องทาง, วันที่ 89/90, legacy `None`, รหัสผิดทุกเงื่อนไข, รหัสเดิมซ้ำ, create/change/reset UI+Admin, session invalidation, API ก่อน/หลังหมดอายุ, ข้อยกเว้น change/logout, AD และ integration regression) และ `apps.core` ผ่าน **100/100 tests**
-     - **ส่งมอบ:** Push ขึ้น `origin/Sec1` บน PR #10: https://github.com/ITWA-PCL/pettycash/pull/10 เข้า `main` สำหรับรอพี่โอ๊ต review (ยังไม่ merge และยังไม่ deploy)
+     - **ผลตรวจล่าสุด (หลังแก้ PR #10 ที่ commit `33f8122`):**
+       - **ในเครื่อง (Windows / SQLite):** `manage.py check` ผ่าน, `makemigrations --check --dry-run` (`No changes detected`), `git diff --check` ผ่าน, `apps.accounts` ผ่าน **74/74 tests** (รวม `LocalPasswordPolicyHardeningTests` 10/10 ครอบคลุม rehash P1 ทั้งกรณีหมดอายุ 100 วันและ `must_change_password=True`, รหัสยอดนิยม `"Password1!"`/ข้อมูลคล้ายผู้ใช้ P2 ทุกช่องทาง, วันที่ 89/90, legacy `None`, รหัสผิดทุกเงื่อนไข, รหัสเดิมซ้ำ, create/change/reset UI+Admin, session invalidation, API ก่อน/หลังหมดอายุ, ข้อยกเว้น change/logout, AD และ integration regression) และ `apps.core` ผ่าน **100/100 tests**
+       - **GitHub Actions บน PR #10 (`Security & Build Gatekeeper` Run `44229428824`, head `33f8122a`):** ผ่านครบทั้ง 3 jobs ได้แก่ **Leaked Secret Scan** (`completed success`), **Dependency Vulnerability Scan** (`completed success`) และ **Django Tests & Container Build** บน Ubuntu + PostgreSQL 17 (`completed success`: **`Ran 403 tests in 151.030s — OK`**, `No changes detected`, Docker build & deploy script checks ผ่าน)
+     - **หมายเหตุขอบเขต & ก้าวต่อไป:**
+       - Push ขึ้น `origin/Sec1` (commits: `c451872` → `dd0ad4f` → `33f8122`) และเปิด **PR #10** (https://github.com/ITWA-PCL/pettycash/pull/10) เข้า `main` สถานะ `open`, `merged=False`, `mergeable=True` (`clean`) รอพี่โอ๊ต review เพื่อตัดสินใจ merge และ deploy (หากต้องการบังคับเปลี่ยนรหัสครั้งแรกเมื่อสร้างบัญชีใหม่ หรือเก็บ password history เกินรหัสปัจจุบัน ให้เปิดเป็น requirement แยกในรอบถัดไป)
+       - บันทึกรายละเอียดรอบปิดท้ายนี้ไว้ใน `handoff.md` / `memory.md` ในเครื่องก่อน (ยังไม่ commit/push ซ้ำเพื่อไม่ให้ทริกเกอร์ CI รอบใหม่โดยไม่จำเป็น)
 
 ## ปิดงาน 14 พฤศจิกายน 2026 — ผู้ใช้อนุมัติ push
 

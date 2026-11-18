@@ -1,5 +1,15 @@
 # บันทึกโครงการ: Petty Cash
 
+## 18 พฤศจิกายน 2026 — อัปเกรดระบบรองรับ Central IAM Standard v2.13.0 (Sec1)
+
+- อัปเกรดบน branch `Sec1` (ไม่มี migration ใหม่: `No changes detected`) ให้รองรับมาตรฐาน Central IAM **v2.13.0**:
+  - ส่ง `"framework_version": "2.13.0"` ใน `GET /api/auth/sso/config/`, Directory M2M API (JSON + `X-CIAM-Framework-Version`), และ Heartbeat payload (`apps/core/ciam_agent.py`)
+  - `sso_authorize_url_view` คืน `503` เมื่อปิด SSO หรือเปิด Break-Glass; `exchange_code_and_login` บันทึก `ciam_origin_ip` และ `browser_ip`; `sso_break_glass_toggle` รองรับ JSON (`break_glass_active`, `reason`) และแจ้ง Telegram เมื่อตั้งค่าไว้
+  - Directory M2M API (`@csrf_exempt`, รองรับทั้ง `/api/v1/directory/accounts...` และ fallback `/api/directory/accounts...`, ตรวจ `X-Management-API-Key` + Origin IP Whitelist) รองรับ `GET` (filter + counters), `POST` (commit บัญชีจริงทั้ง AD และ Local พร้อม Hash `password` + `must_change_password` และ `409 Conflict` เมื่อซ้ำ), และ `PATCH /<username>/status` (1-Click Offboarding + `invalidate_user_sessions` + ปกป้องบัญชี Admin)
+  - `apps/core/ciam_agent.py` ใช้ `provision_ciam_user` ร่วมกัน, ประมวลผล `assigned_accounts` (ทั้ง AD และ Local) และตัด session เมื่อ `DISABLE_USER`
+  - เว้นหมวด E (In-App AI Copilot) เนื่องจาก PettyCash ยังไม่มีฟีเจอร์แชท AI
+- ผลตรวจหลังแก้ในเครื่อง: `manage.py check` ผ่าน, `makemigrations --check --dry-run` (`No changes detected`), `apps.accounts.tests_security_ciam` ผ่าน **45/45 tests**, `apps.accounts` + `apps.core` ผ่าน **177/177 tests** (`314.090s`), ยังไม่ commit/push
+
 ## 18 พฤศจิกายน 2026 — อุดช่องว่าง Local Password Policy ของ Pettycash (Sec1)
 
 - Fast-forward branch `Sec1` ให้ตรง `origin/main` (`6e7ebfe3` / PR #9) โดยคง Flow ธุรกิจของทีม Dev ครบถ้วน และไม่มี migration ใหม่ (`makemigrations --check --dry-run` = `No changes detected`)
@@ -7,7 +17,7 @@
 - รวมศูนย์ Password Policy (`LocalPasswordPolicyValidator` ใน `AUTH_PASSWORD_VALIDATORS`, `validate_local_password`, `apply_local_password`, `invalidate_user_sessions`) ให้หน้าโปรไฟล์ หน้าบังคับเปลี่ยน จัดการผู้ใช้ และ Django Admin (Add + Change Password) ใช้กฎ 8–16 ตัวอักษรครบทุกเงื่อนไขและห้ามซ้ำรหัสเดิม พร้อมตั้ง `password_changed_at` เป็น read-only ใน Django Admin
 - ยกเลิกการใช้วันสร้างบัญชี (`date_joined`) แทน `password_changed_at` ที่ว่าง (`is_password_expired(None)` คืน `(True, 0)`), บังคับเปลี่ยนรหัสชั่วคราวหลัง Admin Reset (`must_change_password=True`), ตัด session เดิมของบัญชีเป้าหมายทันที (ส่วนผู้เปลี่ยนรหัสเองคง session ปัจจุบันและตัด session อื่น), และเพิ่มคำสั่ง read-only `manage.py audit_local_passwords` (พบ 1 บัญชี local ใน SQLite local ครบถ้วน, Production ต้องรันตรวจสอบก่อน rollout)
 - แก้ไขตามผลตรวจ PR #10 เพิ่มเติม 3 จุด: (P1) แยก rehash ใน `User.check_password()` ด้วย `_is_rehashing` ไม่ให้ล้าง `must_change_password` หรือ `password_changed_at`, (P2) คง `AUTH_PASSWORD_VALIDATORS` เดิมทั้ง 4 ตัวร่วมกับ `LocalPasswordPolicyValidator` ทุกช่องทาง, (CI) เปลี่ยน dummy key ในเทสเป็น `"test_management_api_key_valid"` และเพิ่ม `.gitleaksignore` เฉพาะ 2 fingerprint ประวัติใน `c451872`
-- ผลตรวจล่าสุด: `apps.accounts` ผ่าน **74/74 tests** (รวม P1 rehash และ P2 common/similar password regression) และ `apps.core` ผ่าน **100/100 tests**, `manage.py check`, `makemigrations --check --dry-run`, `git diff --check` ผ่าน; Push ขึ้น `origin/Sec1` บน PR #10 https://github.com/ITWA-PCL/pettycash/pull/10 เพื่อรอพี่โอ๊ต review (ไม่ merge/deploy)
+- ผลตรวจล่าสุด (commit `33f8122`): `apps.accounts` ผ่าน **74/74 tests** (รวม P1 rehash และ P2 common/similar password regression), `apps.core` ผ่าน **100/100 tests**, `manage.py check`, `makemigrations --check --dry-run`, `git diff --check` ผ่าน; GitHub Actions (`Security & Build Gatekeeper` Run `44229428824` บน PR #10) ผ่านครบทั้ง 3 jobs (Leaked Secret Scan, Dependency Vulnerability Scan และ Django Tests & Container Build บน PostgreSQL 17 ผ่าน **403/403 tests**); PR #10 https://github.com/ITWA-PCL/pettycash/pull/10 สถานะ `open` (`merged=False`, `clean`) รอพี่โอ๊ต review (บันทึกสรุปรอบนี้ใน `handoff.md`/`memory.md` ในเครื่องไว้ก่อน ยังไม่ commit/push ซ้ำ)
 
 ## ปิดงาน 14 พฤศจิกายน 2026 — อนุมัติส่ง Git
 

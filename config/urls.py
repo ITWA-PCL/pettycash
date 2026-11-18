@@ -5,7 +5,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from apps.accounts.views import (
-    ciam_directory_accounts_api, forced_password_change, login_view, logout_view, signature_image, signature_setup,
+    ciam_directory_account_status_api, ciam_directory_accounts_api, forced_password_change, login_view, logout_view, signature_image, signature_setup,
     sso_authorize_url_view, sso_break_glass_toggle, sso_callback_view, sso_config_view,
     sso_login_redirect, sso_start_view, telegram_test_message, theme_preference,
     user_create, user_delete, user_edit, user_list, user_toggle_active,
@@ -47,6 +47,12 @@ urlpatterns = [
     path("api/auth/sso/break-glass-toggle/", sso_break_glass_toggle, name="sso_break_glass_toggle"),
     path("api/v1/directory/accounts/", ciam_directory_accounts_api, name="ciam_directory_accounts_api"),
     path("api/v1/directory/accounts", ciam_directory_accounts_api, name="ciam_directory_accounts_api_no_slash"),
+    path("api/v1/directory/accounts/<str:username>/status/", ciam_directory_account_status_api, name="ciam_directory_account_status_api"),
+    path("api/v1/directory/accounts/<str:username>/status", ciam_directory_account_status_api, name="ciam_directory_account_status_api_no_slash"),
+    path("api/directory/accounts/", ciam_directory_accounts_api, name="ciam_directory_accounts_fallback_api"),
+    path("api/directory/accounts", ciam_directory_accounts_api, name="ciam_directory_accounts_fallback_api_no_slash"),
+    path("api/directory/accounts/<str:username>/status/", ciam_directory_account_status_api, name="ciam_directory_account_status_fallback_api"),
+    path("api/directory/accounts/<str:username>/status", ciam_directory_account_status_api, name="ciam_directory_account_status_fallback_api_no_slash"),
     path("api/settings/ciam-sso/", ciam_settings_api, name="ciam_settings_api"),
     path("api/settings/ciam-sso/test-connection/", ciam_test_connection, name="ciam_test_connection"),
     path("api/settings/ciam-agent/sync-now/", ciam_sync_now, name="ciam_sync_now"),
