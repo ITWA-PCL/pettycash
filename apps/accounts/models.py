@@ -4,6 +4,7 @@ from uuid import uuid4
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 
 def signature_upload_path(instance: "User", filename: str) -> str:
@@ -78,6 +79,51 @@ class User(AbstractUser):
         default=ThemePreference.LIGHT,
     )
 
+    def __init__(self, *args, **kwargs):
+        password_changed_at_explicit = bool(args) or ("password_changed_at" in kwargs)
+        super().__init__(*args, **kwargs)
+        self._password_changed_at_explicit = password_changed_at_explicit
+
+    def check_password(self, raw_password) -> bool:
+        """
+        Verify raw_password against the stored hash.
+        Preserve password_changed_at and must_change_password when Django
+        upgrades the password hash in-place (rehash) during verification.
+        """
+        orig_changed_at = self.password_changed_at
+        orig_must_change = self.must_change_password
+        self._is_rehashing = True
+        try:
+            return super().check_password(raw_password)
+        finally:
+            self._is_rehashing = False
+            self.password_changed_at = orig_changed_at
+            self.must_change_password = orig_must_change
+
+    def set_password(self, raw_password) -> None:
+        super().set_password(raw_password)
+        if raw_password is not None and not getattr(self, "_is_rehashing", False):
+            self.password_changed_at = timezone.now()
+            self.must_change_password = False
+            self._password_changed_at_explicit = True
+
+    def save(self, *args, **kwargs):
+        if (
+            self._state.adding
+            and self.password_changed_at is None
+            and not getattr(self, "_password_changed_at_explicit", False)
+        ):
+            self.password_changed_at = timezone.now()
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            fields_set = set(update_fields)
+            if "password" in fields_set and not getattr(self, "_is_rehashing", False):
+                fields_set.update({"password_changed_at", "must_change_password"})
+                kwargs["update_fields"] = list(fields_set)
+
+        return super().save(*args, **kwargs)
+
     @property
     def is_local_account(self) -> bool:
         """True if this account manages its password locally, not via AD or external SSO."""
@@ -93,7 +139,7 @@ class User(AbstractUser):
         if self.must_change_password:
             return True, 0
         from .password_policy import is_password_expired
-        return is_password_expired(self.password_changed_at, self.date_joined)
+        return is_password_expired(self.password_changed_at)
 
     @property
     def has_signature(self) -> bool:

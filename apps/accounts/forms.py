@@ -11,7 +11,7 @@ from PIL import Image
 
 from apps.core.models import BusinessUnit
 from .models import User
-from .password_policy import validate_password_complexity
+from .password_policy import apply_local_password, validate_local_password
 from .roles import ACCOUNTANT, ACCOUNTING_APPROVER, REQUESTER, ROLE_NAMES, SUPERVISOR_APPROVER
 
 
@@ -19,7 +19,7 @@ class ProfilePasswordForm(forms.Form):
     password = forms.CharField(
         label="รหัสผ่านใหม่",
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password", "placeholder": "ตั้งรหัสผ่านใหม่"}),
-        help_text="ความยาว 8-16 ตัวอักษร ประกอบด้วยตัวพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ (ห้ามมี Username)",
+        help_text="ความยาว 8-16 ตัวอักษร ประกอบด้วยตัวพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข อักขระพิเศษ ห้ามมี Username และห้ามซ้ำรหัสเดิม",
     )
 
     def __init__(self, user, *args, **kwargs):
@@ -28,16 +28,17 @@ class ProfilePasswordForm(forms.Form):
 
     def clean_password(self):
         password = self.cleaned_data["password"]
-        err = validate_password_complexity(password, username=self.user.username)
-        if err:
-            raise ValidationError(err)
+        validate_local_password(
+            password,
+            user=self.user,
+            username=self.user.username,
+            forbid_current_password=True,
+        )
         validate_password(password, self.user)
         return password
 
     def save(self):
-        self.user.set_password(self.cleaned_data["password"])
-        self.user.password_changed_at = timezone.now()
-        self.user.must_change_password = False
+        apply_local_password(self.user, self.cleaned_data["password"], mark_must_change=False)
         self.user.save(update_fields=["password", "password_changed_at", "must_change_password"])
         return self.user
 
@@ -49,13 +50,11 @@ class ForcedPasswordChangeForm(forms.Form):
     )
     new_password = forms.CharField(
         label="รหัสผ่านใหม่",
-        max_length=16,
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password", "placeholder": "กรอกรหัสผ่านใหม่ (8-16 ตัวอักษร)", "class": "input-field", "id": "id_new_password"}),
         help_text="8-16 ตัวอักษร มีตัวพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ (ห้ามมี Username)",
     )
     confirm_password = forms.CharField(
         label="ยืนยันรหัสผ่านใหม่",
-        max_length=16,
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password", "placeholder": "กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน", "class": "input-field", "id": "id_confirm_password"}),
     )
 
@@ -76,11 +75,23 @@ class ForcedPasswordChangeForm(forms.Form):
         old_password = cleaned_data.get("old_password")
 
         if new_password:
-            err = validate_password_complexity(new_password, username=self.user.username)
-            if err:
-                self.add_error("new_password", err)
-            elif old_password and new_password == old_password:
-                self.add_error("new_password", "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม")
+            try:
+                validate_local_password(
+                    new_password,
+                    user=self.user,
+                    username=self.user.username,
+                    forbid_current_password=True,
+                )
+            except ValidationError as exc:
+                self.add_error("new_password", exc)
+            else:
+                if old_password and new_password == old_password:
+                    self.add_error("new_password", "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม")
+                else:
+                    try:
+                        validate_password(new_password, self.user)
+                    except ValidationError as exc:
+                        self.add_error("new_password", exc)
 
         if new_password and confirm_password and new_password != confirm_password:
             self.add_error("confirm_password", "รหัสผ่านยืนยันไม่ตรงกับรหัสผ่านใหม่")
@@ -88,9 +99,7 @@ class ForcedPasswordChangeForm(forms.Form):
         return cleaned_data
 
     def save(self):
-        self.user.set_password(self.cleaned_data["new_password"])
-        self.user.password_changed_at = timezone.now()
-        self.user.must_change_password = False
+        apply_local_password(self.user, self.cleaned_data["new_password"], mark_must_change=False)
         self.user.save(update_fields=["password", "password_changed_at", "must_change_password"])
         return self.user
 
@@ -183,21 +192,27 @@ class UserManagementForm(forms.ModelForm):
             for field_name in ("supervisor", "accounting_manager", "accountant", "alternate_payer"):
                 self.fields[field_name].queryset = self.fields[field_name].queryset.exclude(pk=self.instance.pk)
         if creating:
-            self.fields["password"].help_text = "จำเป็นสำหรับบัญชีภายในระบบเท่านั้น หากเปิด AD Login สามารถเว้นว่างได้"
+            self.fields["password"].help_text = "จำเป็นสำหรับบัญชีภายในระบบเท่านั้น (8-16 ตัวอักษร มีตัวใหญ่ ตัวเล็ก ตัวเลข อักขระพิเศษ) หากเปิด AD Login สามารถเว้นว่างได้"
         else:
-            self.fields["password"].help_text = "เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน"
+            self.fields["password"].help_text = "เว้นว่างไว้หากไม่ต้องการรีเซ็ตรหัสผ่าน (หากระบุรหัสผ่านชั่วคราว ผู้ใช้จะถูกบังคับเปลี่ยนเมื่อเข้าใช้งานครั้งถัดไป)"
+        self.password_was_reset = False
 
     def save(self, commit=True):
         user = super().save(commit=False)
         user.position_level = self.cleaned_data.get("position_level") or User.PositionLevel.EMPLOYEE
         user.auth_source = User.AuthSource.AD if user.is_ad_auth else User.AuthSource.LOCAL
         password = self.cleaned_data.get("password")
-        if password:
-            user.set_password(password)
-            user.password_changed_at = timezone.now()
+        self.password_was_reset = False
+        if password and not user.is_ad_auth:
+            if self.creating:
+                apply_local_password(user, password, mark_must_change=False)
+            else:
+                apply_local_password(user, password, mark_must_change=True)
+                self.password_was_reset = True
+        elif user.is_ad_auth:
             user.must_change_password = False
-        elif self.creating and user.is_ad_auth:
-            user.set_unusable_password()
+            if self.creating:
+                user.set_unusable_password()
         if commit:
             user.save()
             self.save_m2m()
@@ -209,12 +224,40 @@ class UserManagementForm(forms.ModelForm):
         is_ad = cleaned_data.get("is_ad_auth")
         username = cleaned_data.get("username") or (self.instance.username if self.instance else "")
 
-        if self.creating and not is_ad and not password:
+        if (self.creating or (self.instance.pk and not self.instance.has_usable_password())) and not is_ad and not password:
             self.add_error("password", "กรุณากำหนดรหัสผ่านสำหรับบัญชีภายในระบบ")
         elif password and not is_ad:
-            err = validate_password_complexity(password, username=username)
-            if err:
-                self.add_error("password", err)
+            target_user = self.instance if self.instance and self.instance.pk else None
+            if target_user is not None:
+                candidate_user = User(
+                    pk=target_user.pk,
+                    username=username,
+                    first_name=cleaned_data.get("first_name", target_user.first_name) or "",
+                    last_name=cleaned_data.get("last_name", target_user.last_name) or "",
+                    email=cleaned_data.get("email", target_user.email) or "",
+                    password=target_user.password,
+                    is_ad_auth=False,
+                    auth_source=User.AuthSource.LOCAL,
+                )
+            else:
+                candidate_user = User(
+                    username=username,
+                    first_name=cleaned_data.get("first_name", "") or "",
+                    last_name=cleaned_data.get("last_name", "") or "",
+                    email=cleaned_data.get("email", "") or "",
+                    is_ad_auth=False,
+                    auth_source=User.AuthSource.LOCAL,
+                )
+            try:
+                validate_local_password(
+                    password,
+                    user=candidate_user,
+                    username=username,
+                    forbid_current_password=bool(target_user),
+                    run_django_validators=True,
+                )
+            except ValidationError as exc:
+                self.add_error("password", exc)
         roles = cleaned_data.get("groups")
         if roles and REQUESTER in set(roles.values_list("name", flat=True)):
             for field_name in ("supervisor", "accounting_manager", "accountant"):

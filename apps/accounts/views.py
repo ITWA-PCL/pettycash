@@ -11,6 +11,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import ForcedPasswordChangeForm, ProfileDetailsForm, ProfilePasswordForm, SignatureSetupForm, UserManagementForm
 from .models import User
+from .password_policy import invalidate_user_sessions
 from .roles import SUPER_ADMIN
 from .ad_auth import ADGatewayError, verify_ad_credentials
 from .bot_defense import verify_bot_defense
@@ -145,6 +146,7 @@ def forced_password_change(request):
     if request.method == "POST" and form.is_valid():
         user = form.save()
         update_session_auth_hash(request, user)
+        invalidate_user_sessions(user, exclude_session_key=request.session.session_key)
         record_transaction_log(
             category="password_policy",
             action="change_password",
@@ -282,7 +284,7 @@ def signature_setup(request):
     is_update = request.user.has_signature
     action = request.POST.get("action")
     profile_form = ProfileDetailsForm(request.POST if action == "profile" else None, instance=request.user)
-    password_form = ProfilePasswordForm(request.user, request.POST if action == "password" else None) if not request.user.is_ad_auth else None
+    password_form = ProfilePasswordForm(request.user, request.POST if action == "password" else None) if request.user.is_local_account else None
     signature_form = SignatureSetupForm(
         request.POST if action == "signature" else None,
         request.FILES if action == "signature" else None,
@@ -293,13 +295,22 @@ def signature_setup(request):
         messages.success(request, "บันทึกข้อมูลโปรไฟล์เรียบร้อยแล้ว")
         return redirect("signature_setup")
     if action == "password":
-        if request.user.is_ad_auth:
+        if not request.user.is_local_account:
             messages.error(request, "บัญชี Active Directory ไม่สามารถเปลี่ยนรหัสผ่านจากระบบนี้ได้")
             return redirect("signature_setup")
         if password_form.is_valid():
             user = password_form.save()
             update_session_auth_hash(request, user)
+            invalidate_user_sessions(user, exclude_session_key=request.session.session_key)
             log_event(user, "CHANGE_PASSWORD", user.username)
+            record_transaction_log(
+                category="password_policy",
+                action="change_password",
+                status="success",
+                message=f"ผู้ใช้ '{user.username}' เปลี่ยนรหัสผ่านจากหน้าโปรไฟล์เรียบร้อยแล้ว",
+                details={"username": user.username, "source": "profile"},
+                triggered_by=f"user:{user.username}",
+            )
             messages.success(request, "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว")
             return redirect("signature_setup")
     if action == "signature" and signature_form.is_valid():
@@ -367,7 +378,32 @@ def user_edit(request, user_id):
     managed_user = get_object_or_404(User, pk=user_id)
     form = UserManagementForm(request.POST or None, instance=managed_user)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        managed_user = form.save()
+        if getattr(form, "password_was_reset", False):
+            exclude_key = None
+            if managed_user.pk == request.user.pk:
+                update_session_auth_hash(request, managed_user)
+                exclude_key = request.session.session_key
+            invalidate_user_sessions(managed_user, exclude_session_key=exclude_key)
+            log_event(
+                request.user,
+                "RESET_USER_PASSWORD",
+                managed_user.username,
+                "ตั้งรหัสผ่านชั่วคราวและบังคับเปลี่ยนเมื่อเข้าใช้",
+            )
+            record_transaction_log(
+                category="password_policy",
+                action="admin_reset_password",
+                status="success",
+                message=f"ผู้ดูแล '{request.user.username}' รีเซ็ตรหัสผ่านชั่วคราวให้ '{managed_user.username}'",
+                details={
+                    "username": managed_user.username,
+                    "admin": request.user.username,
+                    "must_change_password": managed_user.must_change_password,
+                    "source": "user_management",
+                },
+                triggered_by=f"user:{request.user.username}",
+            )
         log_event(request.user, "UPDATE_USER", managed_user.username)
         messages.success(request, "บันทึกข้อมูลผู้ใช้เรียบร้อยแล้ว")
         return redirect("user_list")

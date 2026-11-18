@@ -10,7 +10,7 @@ class MaintenanceModeMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith(("/static/", "/media/", "/logout/")):
+        if request.path.startswith(("/static/", "/media/", "/logout/", "/profile/password/change/")):
             return self.get_response(request)
         try:
             configuration = get_system_settings()

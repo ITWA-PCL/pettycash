@@ -1,5 +1,14 @@
 # บันทึกโครงการ: Petty Cash
 
+## 18 พฤศจิกายน 2026 — อุดช่องว่าง Local Password Policy ของ Pettycash (Sec1)
+
+- Fast-forward branch `Sec1` ให้ตรง `origin/main` (`6e7ebfe3` / PR #9) โดยคง Flow ธุรกิจของทีม Dev ครบถ้วน และไม่มี migration ใหม่ (`makemigrations --check --dry-run` = `No changes detected`)
+- บังคับอายุรหัสผ่าน/สถานะ `must_change_password` กับทุก API ที่ใช้ session (`PasswordRotationMiddleware`) ตอบ HTTP `403` JSON (`error_code="PASSWORD_CHANGE_REQUIRED"`) แทนการ redirect HTML โดยยกเว้นเฉพาะ `/profile/password/change/`, `/logout/`, static/media, `telegram_webhook` และ M2M `/api/v1/directory/accounts` ที่มี `X-Management-API-Key`
+- รวมศูนย์ Password Policy (`LocalPasswordPolicyValidator` ใน `AUTH_PASSWORD_VALIDATORS`, `validate_local_password`, `apply_local_password`, `invalidate_user_sessions`) ให้หน้าโปรไฟล์ หน้าบังคับเปลี่ยน จัดการผู้ใช้ และ Django Admin (Add + Change Password) ใช้กฎ 8–16 ตัวอักษรครบทุกเงื่อนไขและห้ามซ้ำรหัสเดิม พร้อมตั้ง `password_changed_at` เป็น read-only ใน Django Admin
+- ยกเลิกการใช้วันสร้างบัญชี (`date_joined`) แทน `password_changed_at` ที่ว่าง (`is_password_expired(None)` คืน `(True, 0)`), บังคับเปลี่ยนรหัสชั่วคราวหลัง Admin Reset (`must_change_password=True`), ตัด session เดิมของบัญชีเป้าหมายทันที (ส่วนผู้เปลี่ยนรหัสเองคง session ปัจจุบันและตัด session อื่น), และเพิ่มคำสั่ง read-only `manage.py audit_local_passwords` (พบ 1 บัญชี local ใน SQLite local ครบถ้วน, Production ต้องรันตรวจสอบก่อน rollout)
+- แก้ไขตามผลตรวจ PR #10 เพิ่มเติม 3 จุด: (P1) แยก rehash ใน `User.check_password()` ด้วย `_is_rehashing` ไม่ให้ล้าง `must_change_password` หรือ `password_changed_at`, (P2) คง `AUTH_PASSWORD_VALIDATORS` เดิมทั้ง 4 ตัวร่วมกับ `LocalPasswordPolicyValidator` ทุกช่องทาง, (CI) เปลี่ยน dummy key ในเทสเป็น `"test_management_api_key_valid"` และเพิ่ม `.gitleaksignore` เฉพาะ 2 fingerprint ประวัติใน `c451872`
+- ผลตรวจล่าสุด: `apps.accounts` ผ่าน **74/74 tests** (รวม P1 rehash และ P2 common/similar password regression) และ `apps.core` ผ่าน **100/100 tests**, `manage.py check`, `makemigrations --check --dry-run`, `git diff --check` ผ่าน; Push ขึ้น `origin/Sec1` บน PR #10 https://github.com/ITWA-PCL/pettycash/pull/10 เพื่อรอพี่โอ๊ต review (ไม่ merge/deploy)
+
 ## ปิดงาน 14 พฤศจิกายน 2026 — อนุมัติส่ง Git
 
 - ส่งแล้วโค้ด commit 3cebc3a บน process-flow; PR #9 https://github.com/ITWA-PCL/pettycash/pull/9 รอเจ้าของตรวจ ไม่ merge/deploy บันทึกสถานะส่งจริงเพิ่มเป็น commit เอกสาร

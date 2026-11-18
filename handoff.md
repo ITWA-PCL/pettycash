@@ -1,5 +1,37 @@
 # บันทึกส่งต่องาน: Petty Cash
 
+## 18 พฤศจิกายน 2026 — อุดช่องว่าง Local Password Policy ของ Pettycash (Sec1)
+
+- **ฐานโค้ดและขอบเขตงาน:**
+  - Sync `Sec1` แบบ Fast-Forward ให้ตรงกับ `origin/main` ล่าสุด (`6e7ebfe3` / PR #9) โดยไม่เปลี่ยน Flow ธุรกิจของทีม Dev และไม่เพิ่ม Schema Migration ใหม่ (`makemigrations --check --dry-run` = `No changes detected`)
+
+- **สรุปการปรับปรุงด้านความปลอดภัยครบทั้ง 4 ข้อ:**
+  1. **บังคับรหัสหมดอายุและสถานะบังคับเปลี่ยนกับทุก API ที่ใช้ Session (`apps/accounts/middleware.py`, `apps/core/middleware.py`):**
+     - `PasswordRotationMiddleware` ตรวจสอบอายุ 90 วัน, `password_changed_at IS NULL`, และ `must_change_password=True` ของ Local Account กับทุก API ที่ใช้ session (รวม `/api/settings/ciam-sso/`, `/api/settings/ciam-sso/test-connection/`, `/api/settings/ciam-agent/sync-now/`, `/api/auth/sso/break-glass-toggle/`, `/notifications/feed/`, `/settings/overview/health/`, `/profile/theme/`, `/settings/users/telegram/test/` และคำขอที่มี `Accept: application/json` หรือ `XMLHttpRequest`)
+     - ตอบกลับ HTTP `403` JSON (`code`/`error_code="PASSWORD_CHANGE_REQUIRED"`, `reason`, `redirect_url="/profile/password/change/"`, `Cache-Control: no-store`) โดยไม่ redirect HTML
+     - ยกเว้นเฉพาะ `/profile/password/change/`, `/logout/`, `/static/`, `/media/`, `telegram_webhook` และ `/api/v1/directory/accounts` (เฉพาะเมื่อส่ง `X-Management-API-Key` เท่านั้น); ไม่กระทบ AD Account, `/api/auth/sso/config/`, หรือ Service Integration อื่น และยกเว้น `/profile/password/change/` ใน `MaintenanceModeMiddleware`
+  2. **Password Policy ชุดเดียวกันทุกช่องทาง & ห้ามใช้รหัสปัจจุบันซ้ำ (`apps/accounts/password_policy.py`, `config/settings.py`, `apps/accounts/models.py`, `apps/accounts/forms.py`, `apps/accounts/admin.py`):**
+     - รวมศูนย์ตัวตรวจที่ `validate_password_complexity`, `validate_local_password`, `LocalPasswordPolicyValidator` (กำหนดใน `AUTH_PASSWORD_VALIDATORS`), `apply_local_password` และ `invalidate_user_sessions`
+     - บังคับกติกาเดียวกัน (8–16 ตัวอักษร, ตัวพิมพ์ใหญ่, ตัวพิมพ์เล็ก, ตัวเลข, อักขระพิเศษ, ห้ามมี Username ปะปน, ห้ามใช้รหัสปัจจุบันซ้ำ) ครบทุกช่องทาง: หน้าโปรไฟล์ (`ProfilePasswordForm`), หน้าบังคับเปลี่ยน (`ForcedPasswordChangeForm`), จัดการผู้ใช้ (`UserManagementForm`), Django Admin Add (`PettyCashAdminUserCreationForm`) และ Django Admin Password Change (`PettyCashAdminPasswordChangeForm`)
+     - Override `User.set_password()` และ `User.save()` ใน `apps/accounts/models.py` เพื่อซิงก์ `password_changed_at` และ `must_change_password` สม่ำเสมอทุกช่องทาง และตั้ง `password_changed_at` เป็น `readonly_fields` ใน Django Admin
+  3. **การ Reset รหัสผ่าน, พฤติกรรม Session, และแผน Migration/Rollout บัญชีเดิม (`apps/accounts/views.py`, `apps/accounts/admin.py`, `apps/accounts/management/commands/audit_local_passwords.py`):**
+     - **Admin Reset (UI `user_edit` & Django Admin `user_change_password`):** ตั้ง `must_change_password=True` และอัปเดต `password_changed_at` เฉพาะ Local Account (ไม่กระทบ AD), ตัด session เดิมของบัญชีเป้าหมายทันทีด้วย `invalidate_user_sessions`, และบันทึก `AdminAuditLog` + `TransactionLog` โดยไม่บันทึกรหัสผ่าน
+     - **User Self-Change (`/profile/signature/`, `/profile/password/change/`):** คง session ปัจจุบันผ่าน `update_session_auth_hash` และตัด session อื่นของผู้ใช้เดียวกันบนอุปกรณ์อื่นทันที
+     - **บัญชีเดิมที่ `password_changed_at IS NULL`:** เลิกใช้วันสร้างบัญชี (`date_joined`) หรือเวลาปัจจุบันแทน โดย `is_password_expired()` คืน `(True, 0)` ทันที (ไม่แต่งวันที่ปลอมลงฐานข้อมูล)
+     - **เครื่องมือสำรวจ & แผน Rollout / Rollback:**
+       - เพิ่มคำสั่ง read-only `python manage.py audit_local_passwords [--json]` (ใน SQLite ทดสอบในเครื่องพบ 1 บัญชี Local คือ `secadmin` มี `password_changed_at` ครบ, 0 affected; **ต้องรันคำสั่งนี้บน Production DB แบบ read-only ก่อน deploy** เพื่อระบุจำนวนบัญชี Local เดิมและ session จริงที่ได้รับผลกระทบ)
+       - **ความเสี่ยง:** บัญชี Local เดิมบน Production ที่ `password_changed_at IS NULL` ทั้งหมดจะถูกบังคับเปลี่ยนรหัสผ่านพร้อมกันทันทีหลังเปิดใช้ (AD/SSO ไม่ได้รับผลกระทบ)
+       - **แผน Rollout:** (1) รัน `audit_local_passwords --json` บน Production แบบ read-only, (2) แจ้งผู้ดูแลและผู้ใช้ Local ล่วงหน้าพร้อมเตรียมช่องทางช่วย reset, (3) Deploy ตาม `deploy/deploy.sh` (สำรอง DB ตามขั้นตอนปกติ โดยไม่มี migration ใหม่) และติดตาม `TransactionLog`
+       - **แผน Rollback:** เนื่องจากไม่มีการแก้ Database Schema จึงสามารถ rollback release กลับ SHA เดิมก่อนหน้าได้ทันทีโดยข้อมูลไม่เสียหาย
+  4. **รายการไฟล์ที่ปรับแก้/เพิ่ม และผลการทดสอบ:**
+     - **แก้ไขเพิ่มเติมรอบตรวจ PR #10 (P1 / P2 / CI Secret Scan):**
+       - **P1 (`apps/accounts/models.py`):** Override `User.check_password()` ตั้งแฟล็ก `_is_rehashing` ระหว่างตรวจรหัสผ่าน เพื่อแยก Django password hash upgrade (rehash) ออกจากการเปลี่ยนรหัสจริง ไม่ล้าง `must_change_password` และไม่รีเซ็ต `password_changed_at`
+       - **P2 (`config/settings.py`, `apps/accounts/password_policy.py`, `apps/accounts/forms.py`):** คง `AUTH_PASSWORD_VALIDATORS` เดิมทั้ง 4 ตัว (`UserAttributeSimilarityValidator`, `MinimumLengthValidator`, `CommonPasswordValidator`, `NumericPasswordValidator`) ร่วมกับ `LocalPasswordPolicyValidator` และเรียกใช้ทุกช่องทางผ่าน `validate_local_password` (ป้องกัน `"Password1!"` และรหัสคล้ายข้อมูลส่วนตัวผู้ใช้)
+       - **CI Secret Scan (`apps/accounts/tests_security_ciam.py`, `.gitleaksignore`):** เปลี่ยน dummy M2M key ในเทสเป็น `"test_management_api_key_valid"` และเพิ่ม `.gitleaksignore` เฉพาะ 2 fingerprint ของ test fixture ใน commit `c451872` โดยไม่ปิด scanner ทั้งชุด
+     - **ไฟล์ที่เปลี่ยน/เพิ่ม:** `apps/accounts/password_policy.py`, `config/settings.py`, `apps/accounts/models.py`, `apps/accounts/middleware.py`, `apps/core/middleware.py`, `apps/accounts/forms.py`, `apps/accounts/views.py`, `apps/accounts/admin.py`, `apps/accounts/management/__init__.py`, `apps/accounts/management/commands/__init__.py`, `apps/accounts/management/commands/audit_local_passwords.py`, `apps/accounts/tests_security_ciam.py`, `.gitleaksignore`, `handoff.md`, `memory.md`
+     - **ผลตรวจล่าสุด:** `manage.py check` ผ่าน, `makemigrations --check --dry-run` (`No changes detected`), `git diff --check` ผ่าน, `apps.accounts` ผ่าน **74/74 tests** (รวม `LocalPasswordPolicyHardeningTests` 10/10 ครอบคลุม rehash P1 ทั้งกรณีหมดอายุ 100 วันและ `must_change_password=True`, รหัสยอดนิยม `"Password1!"`/ข้อมูลคล้ายผู้ใช้ P2 ทุกช่องทาง, วันที่ 89/90, legacy `None`, รหัสผิดทุกเงื่อนไข, รหัสเดิมซ้ำ, create/change/reset UI+Admin, session invalidation, API ก่อน/หลังหมดอายุ, ข้อยกเว้น change/logout, AD และ integration regression) และ `apps.core` ผ่าน **100/100 tests**
+     - **ส่งมอบ:** Push ขึ้น `origin/Sec1` บน PR #10: https://github.com/ITWA-PCL/pettycash/pull/10 เข้า `main` สำหรับรอพี่โอ๊ต review (ยังไม่ merge และยังไม่ deploy)
+
 ## ปิดงาน 14 พฤศจิกายน 2026 — ผู้ใช้อนุมัติ push
 
 - ส่งสำเร็จ commit โค้ด 3cebc3a บน origin/process-flow เปิด PR #9 https://github.com/ITWA-PCL/pettycash/pull/9 เข้า main รอเจ้าของตรวจ ไม่มีการ merge/deploy งานนี้ บันทึกเลข PR เพิ่มเป็น commit เอกสาร
@@ -37,6 +69,32 @@
 - อัปเดต image local จาก requirements ใหม่ที่เพิ่ม PyJWT สำรอง PostgreSQL ก่อน migration เป็น output/sync-main-20261114/before-ciam-20261114.dump (128275 bytes, อยู่นอก Git) ใช้ accounts.0014/0015 และ core.0028 สำเร็จ แล้ว recreate web/daily-reminders/log-cleanup ด้วย image ใหม่
 - ทดสอบ apps.accounts 64 tests ผ่าน (รวม CIAM 32 tests) ฐานทดสอบแยก; local /login/ HTTP200; diff check ผ่าน ไม่ได้ทดสอบ SSO จริงกับ CIAM หรือคัดลอก key/ค่าจริงจาก VPS ไม่เปลี่ยน Webhook ไม่ push/deploy รอผู้ใช้ระบุจุดดีไซน์
 - งานยังไม่ commit: จัดแนวโปรไฟล์/ออกจากระบบเดิม + handoff/memory เท่านั้น โค้ด CIAM เป็นงาน main ของหัวหน้าที่ดึงมาแล้ว
+
+## 14 พฤศจิกายน 2026 — อัปเกรดระบบ Central IAM (Sprint 61) และเชื่อมต่อสถานะ SSO กับ APEX
+
+- **บริบทข้ามโครงการ (Cross-Workspace Status สำหรับกลับมาทำต่อได้ทันที):**
+  - รอบงานนี้ดำเนินการพัฒนาในโฟลเดอร์ `D:\Python\Central-IAM` (Push ขึ้น `origin/main` แล้วที่ Commit `b2bb697`) และเตรียมแพตช์ฝั่ง `D:\Python\APEX` (ยังอยู่ใน Local เพื่อรอทีม Dev ของ APEX Push ตาม Process ของทีม)
+  - ฝั่ง **`D:\Python\Pettycash`** ไม่มีการแก้ไขโค้ดเพิ่มเติมจากรอบวันที่ 13 พฤศจิกายน 2026
+
+- **สรุป 4 การปรับปรุงหลักที่เสร็จสมบูรณ์และทดสอบผ่าน 100% (Zero Breaking Changes):**
+  1. **Zero-System Orphan Identity Cleanup (`Thanasit.C` Fix):** กรองบัญชี 0 ระบบออกจาก `/directory/users` (`directory.py`) และทำความสะอาด `MasterIdentity` ที่ไม่มีระบบผูกเลยใน `scheduler.py` + `initial_data.py`
+  2. **Redundant AD Gateway & Multi-VPN Cluster:** รองรับ AD Auth > 1 Server / VPN Channel ใน `SystemSetting("ad_gateway_cluster")` พร้อม Smart Failover (หยุดทันทีเมื่อ 400/401/403/404/422 เพื่อไม่ล็อก AD ซ้ำ), API `/applications/ad-cluster/*` และหน้าแก้ไขจริงใน `/settings` (`settings/page.tsx`)
+  3. **SSO App Portal Personalization (`/portal`):** เก็บลำดับการ์ด (`app_order`) จากการ Drag-and-Drop และธีม `light` / `dark` รายบุคคลใน `AdminUser.portal_preferences` (`PUT /api/v1/auth/portal-preferences` + `portal/page.tsx`)
+  4. **แก้ไขสถานะ `Apex` Break-Glass และ Whitelist IP (`58.8.188.214` → `157.173.219.153`):**
+     - ฝั่ง **CIAM** (`b2bb697`): เปลี่ยน IP Hardcode ทั้งหมดใน `applications/page.tsx`, เพิ่ม Fallback ไปตรวจ `/api/auth/session` ใน `RestApiConnector._probe_spoke_sso`, และไม่ตีความ M2M Ping ล้มเหลวเป็น `DISABLED` (`applications.py`, Auto-heal ใน `initial_data.py`)
+     - ฝั่ง **APEX (Local - รอทีม Dev Push):** แก้ไข 3 ไฟล์ ได้แก่ `app/src/security/rbac.js`, `app/src/security/ciam.js`, `app/src/db/postgres.js` เปิด Public Route `GET /api/auth/sso/config` และเพิ่ม `172.18.0.1` ร่วมกับ `157.173.219.153` ใน `ciam_allowed_ips`
+
+- **ผลการตรวจสอบล่าสุด:**
+  - Central-IAM Backend: **`pytest` 98/98 passed**
+  - Central-IAM Frontend: **`npx tsc --noEmit` 0 errors**
+  - APEX Security & Compile: **`node scripts/verify-local.js` 0 errors**
+
+- **ก้าวต่อไปเมื่อกลับมาพัฒนาต่อ:**
+  1. Deploy **Central-IAM** บน Production VPS (`/var/www/Ciam`) ด้วย `git pull` แล้ว `docker compose build api web` และ `docker compose up -d api web`
+  2. ทดสอบเพิ่ม On-Prem VPN AD Server (#2 Failover) ในหน้า `/settings`, ทดสอบลากวาง + Dark/Light Mode บน `/portal` และยืนยันการ์ด **Apex** เปิดรับ SSO ปกติ
+  3. แจ้งทีม Dev ของ **APEX** Push การแก้ไขทั้ง 3 ไฟล์ใน `D:\Python\APEX` ขึ้น Git ตาม Process
+
+---
 
 ## 13 พฤศจิกายน 2026 — จัดแนวโปรไฟล์/ออกจากระบบ (local ยังไม่ push)
 
