@@ -180,14 +180,42 @@ class CentralIAMIntegrationTests(TestCase):
         data = res.json()
         self.assertIn("sso_enabled", data)
         self.assertIn("break_glass_active", data)
+        self.assertEqual(data["framework_version"], "2.13.0")
 
     def test_sso_authorize_url_generation(self):
-        res = self.client.post(reverse("sso_authorize_url"))
+        from apps.core.system_settings import get_system_settings
+
+        settings_obj = get_system_settings()
+        settings_obj.ciam_sso_enabled = False
+        settings_obj.ciam_break_glass_active = False
+        settings_obj.save()
+
+        # Disabled SSO must reject with HTTP 503
+        disabled_res = self.client.post(reverse("sso_authorize_url"))
+        self.assertEqual(disabled_res.status_code, 503)
+
+        # Enabled SSO with Break-Glass active must also reject with HTTP 503
+        settings_obj.ciam_sso_enabled = True
+        settings_obj.ciam_break_glass_active = True
+        settings_obj.save()
+        bg_res = self.client.post(reverse("sso_authorize_url"))
+        self.assertEqual(bg_res.status_code, 503)
+
+        # Active SSO with Break-Glass off returns PKCE authorize URL
+        settings_obj.ciam_break_glass_active = False
+        settings_obj.save()
+        res = self.client.post(
+            reverse("sso_authorize_url"),
+            data=json.dumps({"redirect_uri": "https://pettycash.windowasia.com/auth/callback"}),
+            content_type="application/json",
+        )
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertIn("authorize_url", data)
         self.assertIn("code_verifier", data)
+        self.assertIn("state", data)
         self.assertIn("code_challenge", data["authorize_url"])
+        self.assertIn("redirect_uri=https%3A%2F%2Fpettycash.windowasia.com%2Fauth%2Fcallback", data["authorize_url"])
 
     def test_sso_break_glass_toggle(self):
         self.client.force_login(self.admin)
@@ -195,6 +223,28 @@ class CentralIAMIntegrationTests(TestCase):
         self.assertEqual(res.status_code, 302)
         settings_obj = SystemSettings.objects.get(pk=1)
         self.assertTrue(settings_obj.ciam_break_glass_active)
+
+        with patch("apps.accounts.views.telegram_is_configured", return_value=True), \
+             patch("apps.accounts.views.send_telegram_message") as mock_tg:
+            settings_obj.telegram_enabled = True
+            settings_obj.telegram_group_chat_id = "-100123456"
+            settings_obj.save(update_fields=["telegram_enabled", "telegram_group_chat_id"])
+
+            json_res = self.client.post(
+                reverse("sso_break_glass_toggle"),
+                data=json.dumps({"break_glass_active": False, "reason": "CIAM restored"}),
+                content_type="application/json",
+            )
+            self.assertEqual(json_res.status_code, 200)
+            self.assertFalse(json_res.json()["break_glass_active"])
+            self.assertEqual(json_res.json()["reason"], "CIAM restored")
+            mock_tg.assert_called_once()
+
+        tx = TransactionLog.objects.filter(category="security_break_glass", action="toggle_break_glass").first()
+        self.assertIsNotNone(tx)
+        tx_details = json.loads(tx.details)
+        self.assertEqual(tx_details["reason"], "CIAM restored")
+        self.assertTrue(tx_details["prev_state"])
 
     def test_ciam_settings_api_get_and_put(self):
         self.client.force_login(self.admin)
@@ -277,10 +327,12 @@ class CentralIAMIntegrationTests(TestCase):
         # 3. Successful exchange and ciam_sub binding
         request.session["sso_state"] = "valid_state"
         request.session["sso_code_verifier"] = "valid_verifier"
+        request.META["HTTP_X_FORWARDED_FOR"] = "58.8.185.18, 172.18.0.2"
 
         # Mock token endpoint
         mock_token_resp = MagicMock()
         mock_token_resp.status_code = 200
+        mock_token_resp.headers = {"X-CIAM-Origin-IP": "157.173.219.153"}
         mock_token_resp.json.return_value = {"id_token": "mock.jwt.token"}
         mock_post.return_value = mock_token_resp
 
@@ -293,12 +345,21 @@ class CentralIAMIntegrationTests(TestCase):
                 "preferred_username": "new_sso_user",
                 "name": "SSO Test User",
                 "email": "sso@windowasia.com",
+                "ciam_origin_ip": "157.173.219.153",
             }
             user, err = exchange_code_and_login(request, "auth_code", None, "http://localhost/callback", state="valid_state")
             self.assertIsNone(err)
             self.assertIsNotNone(user)
             self.assertEqual(user.ciam_sub, "ciam-uuid-9999")
             self.assertEqual(user.username, "new_sso_user")
+
+        login_tx = TransactionLog.objects.filter(category="ciam_sso", action="login_success").first()
+        self.assertIsNotNone(login_tx)
+        login_details = json.loads(login_tx.details)
+        self.assertEqual(login_details["ciam_origin_ip"], "157.173.219.153")
+        self.assertEqual(login_details["ip"], "157.173.219.153")
+        self.assertEqual(login_details["browser_ip"], "58.8.185.18")
+        self.assertEqual(login_details["client_ip"], "58.8.185.18")
 
     @patch("requests.post")
     @patch("apps.accounts.ciam_sso.get_jwks_client")
@@ -379,7 +440,7 @@ class CentralIAMIntegrationTests(TestCase):
             self.assertEqual(post_res.url, reverse("user_list"))
 
     def test_ciam_directory_accounts_m2m_api(self):
-        """Test GET /api/v1/directory/accounts/ with X-Management-API-Key."""
+        """Test GET /api/v1/directory/accounts/ with X-Management-API-Key and v2.13.0 handshake."""
         from apps.core.system_settings import get_system_settings
         settings_obj = get_system_settings()
         settings_obj.ciam_m2m_key = "test_management_api_key_valid"
@@ -395,16 +456,199 @@ class CentralIAMIntegrationTests(TestCase):
         )
         self.assertEqual(res.status_code, 401)
 
-        # 2. Correct key
+        # 2. Untrusted Origin IP blocked with 403
+        bad_ip_res = self.client.get(
+            reverse("ciam_directory_accounts_api"),
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+            HTTP_X_CIAM_ORIGIN_IP="203.0.113.99",
+        )
+        self.assertEqual(bad_ip_res.status_code, 403)
+
+        # 3. Correct key and allowed X-CIAM-Origin-IP even when X-Forwarded-For contains a proxy hop
         res = self.client.get(
             reverse("ciam_directory_accounts_api"),
             HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+            HTTP_X_CIAM_ORIGIN_IP="157.173.219.153",
+            HTTP_X_FORWARDED_FOR="10.0.0.2, 172.18.0.5",
         )
         self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers.get("X-CIAM-Framework-Version"), "2.13.0")
         data = res.json()
         self.assertEqual(data["status"], "success")
+        self.assertEqual(data["framework_version"], "2.13.0")
+        self.assertEqual(data["application_name"], "Petty Cash")
         self.assertGreaterEqual(data["count"], 1)
+        self.assertEqual(data["total_accounts"], data["count"])
+        self.assertIn("active_accounts", data)
+        self.assertIn("inactive_accounts", data)
         self.assertIn("accounts", data)
+        self.assertIn("id", data["accounts"][0])
+        self.assertIn("group_name", data["accounts"][0])
+
+        # 4. Query param filters (status, search)
+        filtered = self.client.get(
+            reverse("ciam_directory_accounts_api") + "?status=active&search=secadmin",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+        )
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(filtered.json()["total_accounts"], 1)
+
+    def test_ciam_directory_accounts_post_provision_ad_and_local_with_csrf(self):
+        """Test POST /api/v1/directory/accounts and fallback path commit real AD & Local users (v2.13.0)."""
+        from apps.core.system_settings import get_system_settings
+
+        settings_obj = get_system_settings()
+        settings_obj.ciam_m2m_key = "test_management_api_key_valid"
+        settings_obj.save()
+
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        # 1. Provision AD account via /api/v1/directory/accounts/
+        ad_res = csrf_client.post(
+            reverse("ciam_directory_accounts_api"),
+            data=json.dumps({
+                "username": "somchai.p",
+                "full_name": "Somchai Prompong",
+                "email": "somchai.p@windowasia.com",
+                "department": "Purchasing",
+                "group_name": SUPER_ADMIN,  # Must be ignored by Least Privilege guardrail
+                "use_ad_auth": True,
+                "created_by": "Central-IAM-Service",
+            }),
+            content_type="application/json",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+            HTTP_X_CIAM_ORIGIN_IP="157.173.219.153",
+        )
+        self.assertEqual(ad_res.status_code, 201)
+        self.assertEqual(ad_res.headers.get("X-CIAM-Framework-Version"), "2.13.0")
+        ad_data = ad_res.json()
+        self.assertTrue(ad_data["success"])
+        self.assertEqual(ad_data["username"], "somchai.p")
+        self.assertTrue(ad_data["use_ad_auth"])
+
+        ad_user = User.objects.get(username="somchai.p")
+        self.assertTrue(ad_user.is_ad_auth)
+        self.assertEqual(ad_user.auth_source, User.AuthSource.AD)
+        self.assertFalse(ad_user.must_change_password)
+        self.assertFalse(ad_user.has_usable_password())
+        self.assertFalse(ad_user.groups.filter(name=SUPER_ADMIN).exists())
+
+        # 2. Provision Local account with password & must_change_password via fallback /api/directory/accounts
+        local_pwd = "Wa@Local2026!"
+        local_res = csrf_client.post(
+            reverse("ciam_directory_accounts_fallback_api_no_slash"),
+            data=json.dumps({
+                "username": "supplier.01",
+                "full_name": "Supplier Partner",
+                "email": "supplier01@partner.com",
+                "department": "External Partner",
+                "use_ad_auth": False,
+                "password": local_pwd,
+                "must_change_password": True,
+                "created_by": "Central-IAM-Service",
+            }),
+            content_type="application/json",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+            HTTP_X_CIAM_ORIGIN_IP="157.173.219.153",
+        )
+        self.assertEqual(local_res.status_code, 201)
+        local_data = local_res.json()
+        self.assertTrue(local_data["success"])
+        self.assertFalse(local_data["use_ad_auth"])
+        self.assertTrue(local_data["must_change_password"])
+
+        local_user = User.objects.get(username="supplier.01")
+        self.assertFalse(local_user.is_ad_auth)
+        self.assertEqual(local_user.auth_source, User.AuthSource.LOCAL)
+        self.assertTrue(local_user.must_change_password)
+        self.assertTrue(local_user.check_password(local_pwd))
+
+        # Plaintext password must never appear in TransactionLog or AdminAuditLog
+        for entry in TransactionLog.objects.all():
+            self.assertNotIn(local_pwd, f"{entry.message} {entry.details}")
+
+        # Local user can log in with initial password and is forced to change it immediately
+        login_client = Client()
+        login_res = login_client.post(reverse("login"), {
+            "username": "supplier.01",
+            "password": local_pwd,
+            "login_mode": "local",
+        })
+        self.assertRedirects(login_res, reverse("dashboard"), fetch_redirect_response=False)
+        self.assertRedirects(login_client.get(reverse("dashboard")), reverse("forced_password_change"))
+
+        # 3. Duplicate username (case-insensitive) returns 409 Conflict
+        dup_res = csrf_client.post(
+            reverse("ciam_directory_accounts_api"),
+            data=json.dumps({"username": "Supplier.01", "full_name": "Duplicate"}),
+            content_type="application/json",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+        )
+        self.assertEqual(dup_res.status_code, 409)
+
+    def test_ciam_directory_account_status_patch_and_session_revocation(self):
+        """Test PATCH /api/v1/directory/accounts/<username>/status and fallback with session revocation."""
+        from apps.core.system_settings import get_system_settings
+
+        settings_obj = get_system_settings()
+        settings_obj.ciam_m2m_key = "test_management_api_key_valid"
+        settings_obj.save()
+
+        target = User.objects.create_user(
+            username="offboard_target",
+            password="TargetPass26!",
+            is_active=True,
+            password_changed_at=timezone.now(),
+            signature="signatures/offboard_target.png",
+        )
+        target_client = Client()
+        target_client.force_login(target)
+        self.assertEqual(target_client.get(reverse("dashboard")).status_code, 200)
+
+        csrf_client = Client(enforce_csrf_checks=True)
+        patch_res = csrf_client.patch(
+            reverse("ciam_directory_account_status_api_no_slash", args=[target.username]),
+            data=json.dumps({
+                "is_active": False,
+                "reason": "1-Click Offboarding via Central Identity Management",
+                "updated_by": "Central-IAM-Service",
+            }),
+            content_type="application/json",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+            HTTP_X_CIAM_ORIGIN_IP="157.173.219.153",
+        )
+        self.assertEqual(patch_res.status_code, 200)
+        self.assertEqual(patch_res.headers.get("X-CIAM-Framework-Version"), "2.13.0")
+        self.assertFalse(patch_res.json()["is_active"])
+
+        target.refresh_from_db()
+        self.assertFalse(target.is_active)
+        # Pre-existing session must be revoked immediately
+        after_res = target_client.get(reverse("dashboard"))
+        self.assertEqual(after_res.status_code, 302)
+        self.assertIn(reverse("login"), after_res.url)
+
+        # Reactivate via fallback route
+        reactivate_res = csrf_client.patch(
+            reverse("ciam_directory_account_status_fallback_api", args=[target.username]),
+            data=json.dumps({"is_active": True, "reason": "Returned to duty"}),
+            content_type="application/json",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+        )
+        self.assertEqual(reactivate_res.status_code, 200)
+        target.refresh_from_db()
+        self.assertTrue(target.is_active)
+
+        # Protected superuser admin cannot be disabled
+        protected_res = csrf_client.patch(
+            reverse("ciam_directory_account_status_api", args=[self.admin.username]),
+            data=json.dumps({"is_active": False}),
+            content_type="application/json",
+            HTTP_X_MANAGEMENT_API_KEY="test_management_api_key_valid",
+        )
+        self.assertEqual(protected_res.status_code, 403)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
 
     def test_sso_callback_route_alias(self):
         """Verify /auth/callback/ route is handled equivalently to /auth/sso/callback/."""
@@ -420,13 +664,21 @@ class ModeCDirectoryAgentTests(TestCase):
             password="TestPass123!@",
             is_active=True,
             password_changed_at=timezone.now(),
+            signature="signatures/regular_user.png",
         )
 
     def test_execute_local_command_disable_user(self):
+        user_client = Client()
+        user_client.force_login(self.user)
+        self.assertEqual(user_client.get(reverse("dashboard")).status_code, 200)
+
         success, msg = execute_local_command("DISABLE_USER", "regular_user", "1-Click Offboarding")
         self.assertTrue(success)
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_active)
+        res = user_client.get(reverse("dashboard"))
+        self.assertEqual(res.status_code, 302)
+        self.assertIn(reverse("login"), res.url)
 
     def test_execute_local_command_enable_user(self):
         self.user.is_active = False
@@ -448,11 +700,77 @@ class ModeCDirectoryAgentTests(TestCase):
         self.assertFalse(success)
         self.assertIn("Protected account", msg)
 
+    @patch("apps.core.ciam_agent.requests.post")
+    def test_run_agent_cycle_sends_framework_version_and_provisions_assigned_accounts(self, mock_post):
+        from apps.core.ciam_agent import run_agent_cycle
+
+        local_pwd = "AgentLocal26!"
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "status": "ACKNOWLEDGED",
+            "server_time": "2026-11-18T12:00:00Z",
+            "pending_commands": [
+                {
+                    "command_id": "cmd_ad_1",
+                    "action": "PROVISION_USER",
+                    "username": "agent.ad.user",
+                    "reason": "Assigned on CIAM",
+                },
+                {
+                    "command_id": "cmd_loc_1",
+                    "action": "PROVISION_USER",
+                    "username": "agent.local.user",
+                    "reason": "Local account assigned on CIAM",
+                },
+            ],
+            "assigned_accounts": [
+                {
+                    "username": "agent.ad.user",
+                    "full_name": "Agent AD",
+                    "email": "agent.ad@windowasia.com",
+                    "department": "IT",
+                    "use_ad_auth": True,
+                },
+                {
+                    "username": "agent.local.user",
+                    "full_name": "Agent Local",
+                    "email": "agent.local@partner.com",
+                    "department": "Vendor",
+                    "use_ad_auth": False,
+                    "password": local_pwd,
+                    "must_change_password": True,
+                },
+            ],
+        }
+        mock_post.return_value = mock_resp
+
+        results, should_sync, _ = run_agent_cycle(is_full_sync=True)
+        self.assertFalse(should_sync)
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(r["status"] == "COMPLETED" for r in results))
+
+        sent_payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(sent_payload["framework_version"], "2.13.0")
+        self.assertEqual(sent_payload["sync_type"], "FULL_SYNC")
+
+        ad_user = User.objects.get(username="agent.ad.user")
+        self.assertTrue(ad_user.is_ad_auth)
+        self.assertFalse(ad_user.must_change_password)
+
+        local_user = User.objects.get(username="agent.local.user")
+        self.assertFalse(local_user.is_ad_auth)
+        self.assertEqual(local_user.auth_source, User.AuthSource.LOCAL)
+        self.assertTrue(local_user.must_change_password)
+        self.assertTrue(local_user.check_password(local_pwd))
+
     def test_fetch_local_accounts(self):
         accounts = fetch_local_accounts()
         self.assertGreater(len(accounts), 0)
         self.assertIn("username", accounts[0])
         self.assertIn("is_active", accounts[0])
+        self.assertIn("id", accounts[0])
+        self.assertIn("group_name", accounts[0])
 
 
 class LocalPasswordPolicyHardeningTests(TestCase):

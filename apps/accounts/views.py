@@ -1,13 +1,19 @@
+import json
+import secrets
+
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db import transaction
 from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import csrf_exempt
 
 from .forms import ForcedPasswordChangeForm, ProfileDetailsForm, ProfilePasswordForm, SignatureSetupForm, UserManagementForm
 from .models import User
@@ -16,8 +22,9 @@ from .roles import SUPER_ADMIN
 from .ad_auth import ADGatewayError, verify_ad_credentials
 from .bot_defense import verify_bot_defense
 from .ciam_sso import build_sso_authorize_url, exchange_code_and_login
-from apps.core.telegram import send_telegram_message, telegram_is_configured
+from apps.core.telegram import build_telegram_text, send_telegram_message, telegram_is_configured
 from apps.core.audit import log_event, record_transaction_log
+from apps.core.ciam_agent import CIAM_FRAMEWORK_VERSION, PROTECTED_ACCOUNTS, fetch_local_accounts, provision_ciam_user
 from apps.core.pagination import paginate
 from apps.core.system_settings import get_system_settings
 
@@ -182,6 +189,7 @@ def sso_config_view(request):
         "break_glass_active": config.ciam_break_glass_active,
         "ciam_base_url": config.ciam_base_url,
         "client_id": config.ciam_client_id,
+        "framework_version": CIAM_FRAMEWORK_VERSION,
         "login_button_label": "เข้าสู่ระบบด้วย Window Asia SSO ✨",
         "fallback_ad_available": config.ad_enabled,
     })
@@ -189,7 +197,22 @@ def sso_config_view(request):
 
 def sso_authorize_url_view(request):
     """POST /api/auth/sso/authorize-url (Section B.2)"""
-    redirect_uri = request.POST.get("redirect_uri") or request.build_absolute_uri(reverse("sso_callback"))
+    config = get_system_settings()
+    if not config.ciam_sso_enabled or config.ciam_break_glass_active:
+        return JsonResponse(
+            {"detail": "Single Sign-On is currently disabled on this application."},
+            status=503,
+        )
+
+    redirect_uri = request.POST.get("redirect_uri")
+    if not redirect_uri and request.body:
+        try:
+            body = json.loads(request.body)
+            if isinstance(body, dict):
+                redirect_uri = body.get("redirect_uri")
+        except (ValueError, TypeError):
+            pass
+    redirect_uri = redirect_uri or request.build_absolute_uri(reverse("sso_callback"))
     auth_url, verifier, state = build_sso_authorize_url(request, redirect_uri)
     return JsonResponse({
         "authorize_url": auth_url,
@@ -236,8 +259,25 @@ def sso_break_glass_toggle(request):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
 
+    body = {}
+    if request.body and "application/json" in (request.content_type or "").lower():
+        try:
+            parsed = json.loads(request.body)
+            if isinstance(parsed, dict):
+                body = parsed
+        except (ValueError, TypeError):
+            body = {}
+
     config = get_system_settings()
-    new_state = not config.ciam_break_glass_active
+    prev_state = config.ciam_break_glass_active
+    if "break_glass_active" in body:
+        new_state = bool(body["break_glass_active"])
+    elif "break_glass_active" in request.POST:
+        new_state = request.POST.get("break_glass_active", "").strip().lower() in ("1", "true", "yes", "on")
+    else:
+        new_state = not prev_state
+
+    reason = str(body.get("reason") or request.POST.get("reason") or "Emergency Break-Glass Toggle").strip()
     config.ciam_break_glass_active = new_state
     config.save(update_fields=["ciam_break_glass_active"])
 
@@ -245,11 +285,35 @@ def sso_break_glass_toggle(request):
     record_transaction_log(
         category="security_break_glass",
         action="toggle_break_glass",
-        status="warning" if new_state else "info",
+        status="warning" if new_state else "success",
         message=f"สลับสถานะระบบ Break-Glass: {status_str}",
-        details={"break_glass_active": new_state, "admin": request.user.username},
+        details={
+            "break_glass_active": new_state,
+            "prev_state": prev_state,
+            "reason": reason,
+            "ip": request.META.get("REMOTE_ADDR"),
+            "admin": request.user.username,
+        },
         triggered_by=f"user:{request.user.username}",
     )
+    if config.telegram_enabled and config.telegram_group_chat_id and telegram_is_configured():
+        send_telegram_message(
+            config.telegram_group_chat_id,
+            build_telegram_text(
+                f"Break-Glass Mode {status_str}",
+                f"ผู้ดำเนินการ: {request.user.username}\nเหตุผล: {reason}",
+                icon="🚨",
+            ),
+        )
+
+    accept = (request.headers.get("Accept") or "").lower()
+    if "application/json" in accept or "application/json" in (request.content_type or "").lower():
+        return JsonResponse({
+            "status": "success",
+            "break_glass_active": new_state,
+            "reason": reason,
+        })
+
     messages.warning(request, f"ระบบ Break-Glass ถูก {'เปิดใช้งาน' if new_state else 'ปิดใช้งาน'}")
     return redirect("system_settings")
 
@@ -467,19 +531,249 @@ def telegram_test_message(request):
     return JsonResponse({"ok": True, "message": "ส่งข้อความทดสอบแล้ว กรุณาตรวจสอบ Telegram ของผู้ใช้นี้"})
 
 
-def ciam_directory_accounts_api(request):
-    """
-    Central IAM Spoke M2M REST API: GET /api/v1/directory/accounts/
-    Secured by X-Management-API-Key and Server IP Whitelist (Section D.1 / M2M)
-    """
+CIAM_ALLOWED_MANAGEMENT_IPS = {
+    "157.173.219.153",
+    "127.0.0.1",
+    "localhost",
+    "::1",
+    "172.18.0.1",
+    "49.231.185.245",
+    "58.8.190.63",
+}
+
+
+def _extract_ciam_origin_ip(request) -> str:
+    raw_ip = (
+        request.headers.get("X-CIAM-Origin-IP")
+        or request.META.get("HTTP_X_CIAM_ORIGIN_IP")
+        or request.headers.get("X-Origin-IP")
+        or request.META.get("HTTP_X_ORIGIN_IP")
+        or request.headers.get("X-Forwarded-For")
+        or request.META.get("HTTP_X_FORWARDED_FOR")
+        or request.META.get("REMOTE_ADDR")
+        or "127.0.0.1"
+    )
+    first_ip = str(raw_ip).split(",")[0].strip()
+    return first_ip.removeprefix("::ffff:") or "127.0.0.1"
+
+
+def _verify_ciam_management_access(request):
     config = get_system_settings()
     expected_key = config.ciam_m2m_key or config.ciam_client_secret or ""
-
-    # Verify API Key
     provided_key = request.headers.get("X-Management-API-Key") or request.META.get("HTTP_X_MANAGEMENT_API_KEY", "")
-    if not expected_key or provided_key != expected_key:
-        return JsonResponse({"error": "Unauthorized: Invalid or missing X-Management-API-Key"}, status=401)
+    if not expected_key or not secrets.compare_digest(provided_key, expected_key):
+        return JsonResponse(
+            {"status": "FAILED", "error": "Unauthorized: Invalid or missing X-Management-API-Key"},
+            status=401,
+        )
 
-    from apps.core.ciam_agent import fetch_local_accounts
-    accounts = fetch_local_accounts()
-    return JsonResponse({"status": "success", "count": len(accounts), "accounts": accounts})
+    client_ip = _extract_ciam_origin_ip(request)
+    whitelist = set(CIAM_ALLOWED_MANAGEMENT_IPS)
+    if config.ad_origin_ip:
+        whitelist.add(str(config.ad_origin_ip).strip())
+    if client_ip not in whitelist:
+        return JsonResponse(
+            {"status": "FAILED", "detail": f"IP {client_ip} not allowed"},
+            status=403,
+        )
+    return None
+
+
+def _parse_json_object(request):
+    try:
+        payload = json.loads(request.body) if request.body else {}
+    except (ValueError, TypeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+@csrf_exempt
+def ciam_directory_accounts_api(request):
+    """
+    Central IAM Spoke M2M REST API (v2.13.0 Section C.1 & C.2):
+    - GET  /api/v1/directory/accounts/ : Directory Inventory & Framework Handshake
+    - POST /api/v1/directory/accounts/ : Remote User Provisioning (AD & Local)
+    Secured by X-Management-API-Key and Origin IP Whitelist.
+    """
+    auth_error = _verify_ciam_management_access(request)
+    if auth_error is not None:
+        return auth_error
+
+    if request.method == "GET":
+        accounts = fetch_local_accounts()
+        status_filter = (request.GET.get("status") or "all").strip().lower()
+        department_filter = (request.GET.get("department") or "").strip().lower()
+        search_filter = (request.GET.get("search") or "").strip().lower()
+
+        if status_filter == "active":
+            accounts = [a for a in accounts if a.get("is_active")]
+        elif status_filter == "inactive":
+            accounts = [a for a in accounts if not a.get("is_active")]
+
+        if department_filter:
+            accounts = [
+                a for a in accounts
+                if (a.get("department") or "").strip().lower() == department_filter
+            ]
+
+        if search_filter:
+            accounts = [
+                a for a in accounts
+                if search_filter in (a.get("username") or "").lower()
+                or search_filter in (a.get("full_name") or "").lower()
+                or search_filter in (a.get("email") or "").lower()
+            ]
+
+        total_accounts = len(accounts)
+        active_accounts = sum(1 for a in accounts if a.get("is_active"))
+        inactive_accounts = total_accounts - active_accounts
+        response = JsonResponse({
+            "status": "success",
+            "application_name": "Petty Cash",
+            "framework_version": CIAM_FRAMEWORK_VERSION,
+            "count": total_accounts,
+            "total_accounts": total_accounts,
+            "active_accounts": active_accounts,
+            "inactive_accounts": inactive_accounts,
+            "accounts": accounts,
+        })
+        response["X-CIAM-Framework-Version"] = CIAM_FRAMEWORK_VERSION
+        return response
+
+    if request.method == "POST":
+        payload = _parse_json_object(request)
+        if payload is None:
+            return JsonResponse({"status": "FAILED", "error": "invalid_json", "detail": "Invalid JSON payload"}, status=400)
+
+        username = str(payload.get("username") or "").strip()
+        if not username:
+            return JsonResponse({"status": "FAILED", "error": "username_required", "detail": "username is required"}, status=400)
+
+        existing = User.objects.filter(username__iexact=username).first()
+        if existing:
+            return JsonResponse(
+                {
+                    "status": "FAILED",
+                    "error": "account_exists",
+                    "detail": f"User '{username}' already exists",
+                    "username": existing.username,
+                },
+                status=409,
+            )
+
+        use_ad_auth = bool(payload.get("use_ad_auth", True))
+        meta = {
+            "full_name": str(payload.get("full_name") or username).strip(),
+            "email": str(payload.get("email") or "").strip(),
+            "department": str(payload.get("department") or "").strip(),
+            "group_name": str(payload.get("group_name") or payload.get("role") or "").strip(),
+            "use_ad_auth": use_ad_auth,
+            "password": payload.get("password"),
+            "must_change_password": bool(payload.get("must_change_password", True)) if not use_ad_auth else False,
+        }
+        created_by = str(payload.get("created_by") or "Central-IAM-Service").strip()
+        new_user, grp = provision_ciam_user(
+            username,
+            account_meta=meta,
+            reason=f"Remote provisioning by {created_by}",
+            triggered_by="system:ciam",
+        )
+
+        response = JsonResponse(
+            {
+                "success": True,
+                "id": new_user.pk,
+                "username": new_user.username,
+                "message": f"Account '{new_user.username}' created successfully.",
+                "group_name": grp.name if grp else "Standard User",
+                "use_ad_auth": new_user.is_ad_auth,
+                "is_active": new_user.is_active,
+                "must_change_password": new_user.must_change_password,
+                "created_at": new_user.date_joined.isoformat() if new_user.date_joined else timezone.now().isoformat(),
+            },
+            status=201,
+        )
+        response["X-CIAM-Framework-Version"] = CIAM_FRAMEWORK_VERSION
+        return response
+
+    return HttpResponseNotAllowed(["GET", "POST"])
+
+
+@csrf_exempt
+def ciam_directory_account_status_api(request, username: str):
+    """
+    Central IAM Spoke M2M REST API (v2.13.0 Section C.3):
+    PATCH /api/v1/directory/accounts/<username>/status : 1-Click Offboarding & Reactivate.
+    """
+    auth_error = _verify_ciam_management_access(request)
+    if auth_error is not None:
+        return auth_error
+
+    if request.method not in ("PATCH", "POST", "PUT"):
+        return HttpResponseNotAllowed(["PATCH", "POST", "PUT"])
+
+    payload = _parse_json_object(request)
+    if payload is None or not isinstance(payload.get("is_active"), bool):
+        return JsonResponse(
+            {"status": "FAILED", "error": "is_active_required", "detail": "Boolean is_active field is required"},
+            status=400,
+        )
+
+    target_user = User.objects.filter(username__iexact=username.strip()).first()
+    if target_user is None:
+        return JsonResponse(
+            {"status": "FAILED", "error": "not_found", "detail": f"User '{username}' not found"},
+            status=404,
+        )
+
+    is_active = payload["is_active"]
+    reason = str(payload.get("reason") or "Status updated via Central Management API").strip()
+    updated_by = str(payload.get("updated_by") or "Central-IAM-Service").strip()
+
+    if not is_active:
+        if (
+            target_user.username.lower() in PROTECTED_ACCOUNTS
+            or target_user.is_superuser
+            or is_last_active_admin(target_user)
+        ):
+            return JsonResponse(
+                {
+                    "status": "FAILED",
+                    "detail": f"Protected account: Cannot disable administrator '{target_user.username}'",
+                },
+                status=403,
+            )
+
+        with transaction.atomic():
+            target_user.is_active = False
+            target_user.save(update_fields=["is_active"])
+            invalidate_user_sessions(target_user)
+            record_transaction_log(
+                category="ciam_sso",
+                action="account_deactivated",
+                status="warning",
+                message=f"ระงับสิทธิ์บัญชีพนักงาน '{target_user.username}' ผ่าน M2M Directory API: {reason}",
+                details={"username": target_user.username, "reason": reason, "updated_by": updated_by},
+                triggered_by="system:ciam",
+            )
+    else:
+        with transaction.atomic():
+            target_user.is_active = True
+            target_user.save(update_fields=["is_active"])
+            record_transaction_log(
+                category="ciam_sso",
+                action="account_reactivated",
+                status="info",
+                message=f"คืนสิทธิ์บัญชีพนักงาน '{target_user.username}' ผ่าน M2M Directory API: {reason}",
+                details={"username": target_user.username, "reason": reason, "updated_by": updated_by},
+                triggered_by="system:ciam",
+            )
+
+    response = JsonResponse({
+        "username": target_user.username,
+        "is_active": target_user.is_active,
+        "message": "Account status updated successfully",
+        "updated_at": timezone.now().isoformat(),
+    })
+    response["X-CIAM-Framework-Version"] = CIAM_FRAMEWORK_VERSION
+    return response

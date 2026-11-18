@@ -9,7 +9,11 @@ def _is_m2m_directory_request(request) -> bool:
         request.headers.get("X-Management-API-Key")
         or request.META.get("HTTP_X_MANAGEMENT_API_KEY")
     )
-    return has_m2m_key and request.path.rstrip("/") == "/api/v1/directory/accounts"
+    clean_path = request.path.rstrip("/")
+    return has_m2m_key and (
+        clean_path in ("/api/v1/directory/accounts", "/api/directory/accounts")
+        or clean_path.startswith(("/api/v1/directory/accounts/", "/api/directory/accounts/"))
+    )
 
 
 def _is_api_request(request) -> bool:

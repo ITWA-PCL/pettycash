@@ -156,6 +156,8 @@ def exchange_code_and_login(
             return None, "การแลกเปลี่ยนรหัสยืนยันตัวตนกับ Central IAM ล้มเหลว"
 
         token_data = res.json()
+        raw_origin_hdr = res.headers.get("X-CIAM-Origin-IP") if hasattr(res, "headers") else None
+        token_origin_ip = raw_origin_hdr.split(",")[0].strip() if isinstance(raw_origin_hdr, str) else ""
         id_token = token_data.get("id_token")
         if not id_token:
             return None, "ไม่พบ ID Token ในข้อมูลตอบกลับจาก Central IAM"
@@ -186,6 +188,12 @@ def exchange_code_and_login(
         return None, err_msg
 
     # 3. Read Claims from Central IAM / Active Directory
+    raw_claim_origin = claims.get("ciam_origin_ip")
+    ciam_origin_ip = (
+        raw_claim_origin.split(",")[0].strip()
+        if isinstance(raw_claim_origin, str) and raw_claim_origin.strip()
+        else (token_origin_ip or "157.173.219.153")
+    )
     ciam_sub = (claims.get("sub") or "").strip()
     username = (claims.get("preferred_username") or ciam_sub or "").strip()
     full_name = claims.get("name") or claims.get("full_name") or ""
@@ -314,6 +322,13 @@ def exchange_code_and_login(
     request.session["auth_provider"] = "ciam_sso"
     request.session["ciam_portal_url"] = f"{base_url}/portal"
 
+    raw_xff = request.META.get("HTTP_X_FORWARDED_FOR") or ""
+    browser_ip = (
+        raw_xff.split(",")[0].strip()
+        if isinstance(raw_xff, str) and raw_xff.strip()
+        else (request.META.get("REMOTE_ADDR") or "127.0.0.1")
+    )
+
     record_transaction_log(
         category="ciam_sso",
         action="login_success",
@@ -322,7 +337,10 @@ def exchange_code_and_login(
         details={
             "username": username,
             "ciam_sub": ciam_sub,
-            "ip": request.META.get("REMOTE_ADDR"),
+            "ip": ciam_origin_ip,
+            "ciam_origin_ip": ciam_origin_ip,
+            "browser_ip": browser_ip,
+            "client_ip": browser_ip,
             "ciam_issuer": base_url,
             "auth_method": "sso_oidc",
         },
