@@ -1,5 +1,23 @@
 # บันทึกส่งต่องาน: Petty Cash
 
+## 18 พฤศจิกายน 2026 — การทดสอบ Two-Way Reconciliation และการลบบัญชี Local Account (Sec1)
+
+- **สถานะการส่งมอบโค้ดล่าสุดบน `origin/Sec1`:**
+  - โค้ดยกระดับ v2.13.0 ทั้งหมดผ่านการทดสอบ 177/177 tests และ commit/push ขึ้น `origin/Sec1` เรียบร้อยแล้วที่ commit `baad8eb54a22ec538a336cba2939b5c2e65eb683`
+  - ป้ายเวอร์ชันบนหน้าจอ Central IAM Console แสดง `✓ v2.13.0 (ตรงสเปกล่าสุด)` สีเขียวเรียบร้อยแล้ว
+
+- **ผลการทดสอบการจัดการวงจรชีวิตบัญชี (Account Lifecycle: Disable vs Delete เคส `Test.1`):**
+  1. **การปิดใช้งาน (Disable):**
+     - เมื่อกด `[ ปิดใช้งาน ]` ที่ PettyCash $\rightarrow$ Central IAM ปรับสถานะเป็น Inactive พร้อมระบุ `status_origin = 'SPOKE_APP'` และเหตุผล `"ระงับสิทธิ์โดย PettyCash (Heartbeat Sync)"` อย่างถูกต้องตามกฎ *First-Action Wins* (หมวด D.6.1)
+  2. **ความแตกต่างระหว่าง "กดลบ (Delete)" vs "กดปิดใช้งาน (Disable)":**
+     - **กดลบโดยตรงขณะที่ยัง Active:** CIAM ยังมองว่าบัญชีมีสิทธิ์อยู่ เมื่อไม่พบบัญชีในระบบลูก CIAM จะเข้าใจว่าเกิด Data Loss และเข้ากฎ *Account Preservation & No Blind Deletion* (หมวด D.6.3) โดยปรับเป็น `PENDING_PROVISION` และสั่ง Re-provision คืนกลับมาที่ PettyCash
+     - **ปิดใช้งานก่อนแล้วค่อยลบ:** PettyCash ปิดใช้งาน $\rightarrow$ CIAM บันทึกเป็น Inactive $\rightarrow$ จากนั้น PettyCash ลบบัญชี $\rightarrow$ เมื่อซิงก์รอบถัดไป CIAM จะสั่ง `db.delete(stale)` ลบ Mapping ออกจาก CIAM ถาวร และ `cleanup_orphan_identities` จะลบ Identity ออกจาก Directory ของ CIAM ด้วย
+  3. **การทำงานของปุ่มซิงก์ (PettyCash Sync vs CIAM Sync):**
+     - **ปุ่ม "⚡ ซิงก์บัญชีผู้ใช้กับ CIAM ทันที" บน PettyCash:** ทำงานผ่าน Mode C Heartbeat (`run_agent_cycle(is_full_sync=True)` $\rightarrow$ `POST /api/v1/agent/heartbeat`) ข้อความ *"ดำเนินการ 0 คำสั่ง"* หมายถึงไม่มีคำสั่งตกค้างจาก CIAM ส่งมาให้ประมวลผล แต่เนื่องจากใน `agent.py` ของ Central IAM ปัจจุบันยังขาด Logic ส่วน Stale Account Pruning บัญชีที่ถูกลบจึงยังไม่ถูกกวาดออกจากหน้าจอ CIAM ทันที
+     - **ปุ่ม "ซิงค์" บนการ์ด Spoke ของ CIAM:** ทำงานผ่าน Mode A REST API (`POST /api/v1/applications/{app_id}/sync` $\rightarrow$ `sync_single_application` ใน `scheduler.py`) ซึ่งมี Stale Account Pruning อยู่แล้ว จึงกวาดบัญชี `Test.1` ออกจากหน้าจอ CIAM ได้ทันที
+  4. **คำแนะนำทางเทคนิคส่งต่อให้ทีม Dev Central IAM:**
+     - ให้เพิ่มบล็อกโค้ด Stale Account Pruning และ `cleanup_orphan_identities(db)` ใน `backend/app/api/v1/agent.py` (ฟังก์ชัน `handle_agent_heartbeat` เมื่อ `payload.accounts is not None`) เพื่อให้การกดซิงก์จากหน้า Spoke ทำการกวาดบัญชีที่ลบแล้วออกจากหน้าจอ CIAM ได้ทันทีแบบเรียลไทม์
+
 ## 18 พฤศจิกายน 2026 — อัปเกรดระบบรองรับ Central IAM Standard v2.13.0 (Sec1)
 
 - **ขอบเขตงาน & ฐานโค้ด:**
@@ -27,7 +45,7 @@
   - `manage.py makemigrations --check --dry-run`: `No changes detected`
   - `manage.py test apps.accounts.tests_security_ciam -v 2`: ผ่าน **45/45 tests** (`161.843s`)
   - `manage.py test apps.accounts apps.core -v 2`: ผ่าน **177/177 tests** (`314.090s`)
-  - `git diff --check`: ผ่าน (ไม่มีปัญหา whitespace); ยังไม่ commit/push (รอคำสั่งผู้ใช้บน branch `Sec1`)
+  - `git diff --check`: ผ่าน (ไม่มีปัญหา whitespace); commit และ push ขึ้น `origin/Sec1` เรียบร้อยแล้วที่ commit `baad8eb54a22ec538a336cba2939b5c2e65eb683`
 
 ## 18 พฤศจิกายน 2026 — อุดช่องว่าง Local Password Policy ของ Pettycash (Sec1)
 
