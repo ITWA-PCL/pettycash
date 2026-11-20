@@ -17,6 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .forms import ForcedPasswordChangeForm, ProfileDetailsForm, ProfilePasswordForm, SignatureSetupForm, UserManagementForm
 from .models import User
+from .return_target import consume_setup_target, consume_sso_target, safe_target
 from .password_policy import invalidate_user_sessions
 from .roles import SUPER_ADMIN
 from .ad_auth import ADGatewayError, verify_ad_credentials
@@ -52,7 +53,7 @@ def is_last_active_admin(user):
 
 def login_view(request):
     error = None
-    next_url = request.POST.get("next") or request.GET.get("next") or ""
+    next_url = safe_target(request, request.POST.get("next") or request.GET.get("next") or "")
     config = get_system_settings()
 
     # If already authenticated, redirect to next_url or dashboard
@@ -147,7 +148,7 @@ def forced_password_change(request):
     Restricted strictly to local accounts.
     """
     if not request.user.is_local_account:
-        return redirect("dashboard")
+        return redirect(consume_setup_target(request) or 'dashboard')
 
     form = ForcedPasswordChangeForm(request.user, request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -166,7 +167,7 @@ def forced_password_change(request):
         messages.success(request, "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว (มีอายุการใช้งาน 90 วัน)")
         if not user.has_signature and get_system_settings().require_signature_on_first_login:
             return redirect("signature_setup")
-        return redirect("dashboard")
+        return redirect(consume_setup_target(request) or 'dashboard')
 
     is_expired, days_left = request.user.check_password_expired()
     return render(
@@ -245,12 +246,16 @@ def sso_callback_view(request):
         messages.error(request, "ไม่พบ Authorization Code จาก Central IAM")
         return redirect("login")
 
+    target = consume_sso_target(request, state)
     user, error = exchange_code_and_login(request, code, None, redirect_uri, state)
     if error:
         messages.error(request, error)
+        if target:
+            from urllib.parse import urlencode
+            return redirect(reverse('login') + '?' + urlencode({'next': target}))
         return redirect("login")
 
-    return redirect("dashboard")
+    return redirect(target or 'dashboard')
 
 
 @user_passes_test(can_manage_users)
@@ -380,7 +385,7 @@ def signature_setup(request):
     if action == "signature" and signature_form.is_valid():
         signature_form.save()
         messages.success(request, "บันทึกลายเซ็นเรียบร้อยแล้ว")
-        return redirect("dashboard")
+        return redirect(consume_setup_target(request) or 'dashboard')
     return render(request, "accounts/signature_setup.html", {
         "form": signature_form,
         "profile_form": profile_form,
@@ -527,7 +532,9 @@ def telegram_test_message(request):
         return JsonResponse({"ok": False, "message": "ยังไม่ได้ตั้งค่า TELEGRAM_BOT_TOKEN ใน .env"}, status=503)
     text = "✅ ทดสอบการแจ้งเตือนจาก Petty Cash\nหากเห็นข้อความนี้ แปลว่าการผูก Telegram ใช้งานได้แล้ว"
     if not send_telegram_message(chat_id, text):
-        return JsonResponse({"ok": False, "message": "ส่งไม่สำเร็จ: ให้ผู้ใช้นี้กด Start กับ Bot และตรวจสอบ Telegram User ID"}, status=502)
+        return JsonResponse({"ok": False, "message": "ส่งไม่สำเร็จ: กรุณาตรวจการเชื่อมต่อ Telegram User ID และให้ผู้ใช้กด Start หรือปลดบล็อก Bot"}, status=502)
+    from apps.core.telegram_connection import mark_delivery
+    mark_delivery(chat_id, True)
     return JsonResponse({"ok": True, "message": "ส่งข้อความทดสอบแล้ว กรุณาตรวจสอบ Telegram ของผู้ใช้นี้"})
 
 

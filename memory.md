@@ -1,5 +1,39 @@
 # บันทึกโครงการ: Petty Cash
 
+## ส่งงาน 20 พฤศจิกายน 2026 — คำสั่งล่าสุดให้ push
+
+- ผู้ใช้อนุญาต push งานที่ค้างทั้ง Telegram reminder, LOGIN_SSO audit และ SSO return target แล้ว ส่งผ่าน process-flow/PR เข้า main ไม่ merge/deploy แทนเจ้าของโครงการ
+- ทดสอบรวม 440 ผ่าน ชุดลิงก์ล่าสุด 10 ผ่าน; หลัง deploy ต้อง migrate core0029 และเชื่อมต่อ Webhook หนึ่งครั้ง แล้วทดสอบ SSO จากลิงก์คำขอจริงบน VPS
+
+## 20 พฤศจิกายน 2026 — ผู้ใช้ให้แก้ลิงก์หลัง SSO แล้ว / ยังไม่ push
+
+- สถานะล่าสุดแทนคำว่า “พัก SSO next” ด้านล่าง: ทำตาม “รองแก้เลย” แล้วใน local ปุ่ม SSO รับ next ของคำขอ เก็บ session ผูก state และกลับคำขอหลังเข้าสู่ระบบ ปลายทาง same-origin เท่านั้น ใช้ครั้งเดียว ไม่เปลี่ยนสิทธิ์/PKCE/JWT
+- กรณีบังคับเปลี่ยนรหัสผ่านหรือเพิ่มลายเซ็นต้องทำให้ครบก่อน แล้วกลับคำขอเดิม ไม่มี next ให้กลับ dashboard ปกติ AD/local ยังคงเปิดคำขอเดิมได้
+- งานนี้รวมกับ Telegram reminder และ LOGIN_SSO audit ที่ยังค้าง ยังไม่ commit/push/deploy และยังไม่ได้ทดสอบ SSO จริงบน VPS
+- ทดสอบรวม 440 ผ่าน และชุดลิงก์ 10 ผ่านหลังเพิ่มตรวจเปิดคำขอจริง/ปฏิเสธบัญชีอื่นที่ไม่มีสิทธิ์
+
+## ปิดงาน 20 พฤศจิกายน 2026 — รอคำสั่ง push / พัก SSO next
+
+- งานเพิ่มหลังสรุป: แก้SSOloginไม่ปรากฏหน้าlog (โค้ดเดิมเก็บTransactionLogแต่หน้าอ่านAdminAuditLog) เพิ่มLOGIN_SSO auditหลังสำเร็จและlabelไทย คงsecuritylogเดิม ไม่แตะSSOnext/ไม่backfillย้อนหลัง ไม่ได้อ่านDBVPSตรงๆ เทสSSO/adminlog13ผ่าน ยังไม่push/deploy
+
+- ผู้ใช้ยืนยันยังไม่push สรุปงานวันนี้แล้ว localฐานmaineadc8e2รวมIAM2.13หัวหน้า ค้างเฉพาะfeatureเตือนTelegram+tests/docs ยังไม่commit/push/deploy
+- พฤติกรรมสุดท้าย: แอดมินกรอกIDเอง เตือนเฉพาะตรวจแล้วส่งไม่ได้จริง ตรวจasyncsendChatActionไม่ส่งtestmessage คนเคยStartแล้วไม่เตือนเพราะไม่มีประวัติ ปุ่มแอดมินทดสอบส่งสำเร็จและข้อความงานสำเร็จทำให้พร้อมใช้ ปิดข้ามได้/loginใหม่เตือนอีกเมื่อยังส่งไม่ได้ เครือข่ายขัดข้องไม่เตือนว่าไม่Start
+- core0029 localสำรอง+migrateแล้ว หลังdeployVPSต้องmigrate+เชื่อมWebhookใหม่1ครั้ง ชุดรวม430testsผ่าน131.749s Chromiumไม่flash/มือถือมืดสว่าง/ปิดไม่ค้างผ่าน
+- ผู้ใช้สั่งพักแก้SSO return-nextอย่างชัดเจน: directloginมีnext, SSOกลับdashboard ยังไม่แก้ ไม่ต้องทำต่อจนผู้ใช้สั่ง VPS pettycash.windowasia.com / localTunnel tsc17api.waapps.net รอตัวอย่างลิงก์Telegramจริงภายหลัง
+
+## 20 พฤศจิกายน 2026 — เตือน Start Telegram (local ยังไม่ push)
+
+- ตรวจลิงก์TelegramVPSเพิ่มเติมพบ: /claims/1/→login?next=/claims/1/ถูก แต่SSOloginไม่ส่งต่อnext/callbackredirectdashboardเสมอ จำลองlocalยืนยันแล้ว ยังไม่ได้แก้ในรอบตรวจ รอhrefจากข้อความจริง1อันเพื่อเช็กโดเมน/เลขคำขอจริงด้วย
+
+- ล่าสุดผู้ใช้ยืนยันคนที่ส่ง Telegram ได้/เคย Start แล้วห้ามเตือน ปรับไม่อิงแค่ประวัติStart: ตรวจส่งได้แบบ async sendChatAction(typing) โดยไม่ส่งข้อความทดสอบ และซ่อน banner จนพบ failureเฉพาะ chat not found/blocked/cannot initiate; network/401/429/5xxไม่เตือน missingID/disabledไม่เตือนStart
+- ปุ่มแอดมินทดสอบส่งสำเร็จและข้อความงานที่ส่งสำเร็จยืนยันcontactพร้อมใช้ทันที ไม่ให้คนเก่ากดStartซ้ำ CSS/JS v20261120-02 ชุดเฉพาะ40testsและChromiumคอมมือถือสว่างมืดไม่flash/ปิดได้ผ่าน ยังไม่push ไม่ส่งข้อความจริง
+- ผลรวมล่าสุด430testsผ่าน131.749s ไม่เพิ่มmigrationจาก0029เดิม; บัญชีที่เคยStartแต่ไม่มีประวัติไม่ถูกเตือนก่อนตรวจส่งจริง
+
+- sync main eadc8e2แล้ว รวมCIAM2.13/passwordงานหัวหน้า คงsecurityflowเดิม
+- ผู้ใช้เลือกแอดมินกรอกTelegramUserIDเอง เตือนหลังloginปิดข้ามได้/loginครั้งถัดไปเตือนใหม่ เพิ่มbasebannerแยกmissingID/disabled/unconfirmed ไม่บังคับ ไม่autoassignIDหรือenableflag
+- core0029 TelegramBotContact ติดตามต่อBot/IDจากStart/privatecallback/blockผ่านsecret webhook ปุ่มเปิดBotgetMeเมื่อคลิกเท่านั้น ไม่หน่วงlogin; allowed_updatesเพิ่มmessage/my_chat_member คงcallback_query ต้องกดเชื่อมWebhookใหม่หลังdeployเพื่อรับStart ไม่สลับWebhookจริงในรอบนี้
+- localbackup output/telegram-reminder-20261120/before-telegram-reminder-20261120.dump แล้ว migrate0029 local ชุดรวม423testsผ่าน123.127s Chromiumคอมมือถือมืดสว่าง/ปิดเตือนไม่ค้างผ่าน ยังไม่commit/push/deploy/ส่งข้อความจริง รายละเอียดhandoff
+
 ## 18 พฤศจิกายน 2026 — อัปเกรดระบบรองรับ Central IAM Standard v2.13.0 (Sec1)
 
 - อัปเกรดบน branch `Sec1` (ไม่มี migration ใหม่: `No changes detected`) ให้รองรับมาตรฐาน Central IAM **v2.13.0**:

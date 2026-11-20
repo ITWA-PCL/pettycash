@@ -33,6 +33,7 @@ def build_telegram_text(title: str, message: str, link: str = "", icon: str = "ð
 def telegram_api_request(method: str, payload: dict) -> bool:
     if not telegram_is_configured():
         return False
+    response = None
     try:
         response = requests.post(
             f"{settings.TELEGRAM_API_BASE_URL.rstrip('/')}/bot{telegram_token()}/{method}",
@@ -41,10 +42,31 @@ def telegram_api_request(method: str, payload: dict) -> bool:
         )
         response.raise_for_status()
     except requests.RequestException:
+        if method == 'sendMessage' and response is not None:
+            from .telegram_connection import definitive_delivery_failure, mark_delivery
+            try:
+                if definitive_delivery_failure(response.json()):
+                    mark_delivery(payload.get('chat_id'), False)
+            except (ValueError, TypeError, AttributeError):
+                pass
         # Request exceptions include the URL containing the bot token. Never log it.
         logger.warning("Unable to call Telegram method %s", method)
         return False
-    return True
+    # Telegram errors can also be returned in a JSON envelope. Only proven
+    # delivery affects onboarding; transport/server failures never mean no Start.
+    try:
+        data = response.json()
+    except (ValueError, TypeError, AttributeError):
+        data = None
+    if isinstance(data, dict):
+        if method == 'sendMessage':
+            from .telegram_connection import definitive_delivery_failure, mark_delivery
+            if data.get('ok') is True:
+                mark_delivery(payload.get('chat_id'), True)
+            elif definitive_delivery_failure(data):
+                mark_delivery(payload.get('chat_id'), False)
+        return data.get('ok') is True
+    return False
 
 
 def send_telegram_message(chat_id: str, text: str, reply_markup: dict | None = None) -> bool:

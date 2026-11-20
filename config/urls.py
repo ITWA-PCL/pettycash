@@ -24,9 +24,13 @@ from apps.core.server_configuration import server_configuration
 from apps.accounts.views import signature_image
 from apps.claims.views import claim_signature_image
 from apps.core.views import system_web_health
+from apps.core.telegram_connection import check_connection, dismiss_reminder, open_bot
 
 
 urlpatterns = [
+    path('profile/telegram/check/', check_connection, name='telegram_check_connection'),
+    path('profile/telegram/open/', open_bot, name='telegram_open_bot'),
+    path('profile/telegram/reminder/dismiss/', dismiss_reminder, name='telegram_dismiss_reminder'),
     path("admin/", admin.site.urls),
     path("", dashboard, name="dashboard"),
     path("dashboard/tracking/", dashboard_claim_tracker, name="dashboard_claim_tracker"),

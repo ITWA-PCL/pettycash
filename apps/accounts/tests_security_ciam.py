@@ -324,6 +324,8 @@ class CentralIAMIntegrationTests(TestCase):
         self.assertIsNone(user)
         self.assertIn("pkce", err.lower())
 
+        self.assertFalse(AdminAuditLog.objects.filter(action='LOGIN_SSO').exists())
+
         # 3. Successful exchange and ciam_sub binding
         request.session["sso_state"] = "valid_state"
         request.session["sso_code_verifier"] = "valid_verifier"
@@ -360,6 +362,15 @@ class CentralIAMIntegrationTests(TestCase):
         self.assertEqual(login_details["ip"], "157.173.219.153")
         self.assertEqual(login_details["browser_ip"], "58.8.185.18")
         self.assertEqual(login_details["client_ip"], "58.8.185.18")
+        audit = AdminAuditLog.objects.get(action='LOGIN_SSO')
+        self.assertEqual(audit.actor_id, user.pk)
+        self.assertEqual(audit.target, user.username)
+        self.assertEqual(audit.label, 'เข้าสู่ระบบ (SSO)')
+        self.assertNotIn('mock.jwt.token', audit.detail)
+        self.client.force_login(self.admin)
+        page = self.client.get(reverse('admin_operations'), {'audit_action': 'LOGIN_SSO'})
+        self.assertContains(page, 'เข้าสู่ระบบ (SSO)')
+        self.assertContains(page, user.username)
 
     @patch("requests.post")
     @patch("apps.accounts.ciam_sso.get_jwks_client")

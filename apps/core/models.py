@@ -6,7 +6,7 @@ from .secret_fields import SecretTextField
 
 AUDIT_ACTION_LABELS = {
     "CORRECT_REQUESTED": "บัญชีแก้ยอดก่อนจ่าย",
-    "LOGIN_LOCAL": "เข้าสู่ระบบ (บัญชีภายใน)", "LOGIN_AD": "เข้าสู่ระบบ (Active Directory)",
+    "LOGIN_LOCAL": "เข้าสู่ระบบ (บัญชีภายใน)", "LOGIN_AD": "เข้าสู่ระบบ (Active Directory)", "LOGIN_SSO": "เข้าสู่ระบบ (SSO)",
     "CREATE_USER": "สร้างผู้ใช้", "UPDATE_USER": "แก้ไขผู้ใช้", "ENABLE_USER": "เปิดใช้งานผู้ใช้", "DISABLE_USER": "ปิดใช้งานผู้ใช้", "DELETE_USER": "ลบผู้ใช้",
     "CREATE_CLAIM": "สร้างคำขอ", "UPDATE_CLAIM": "แก้ไขคำขอ", "SUBMIT_CLAIM": "ส่งคำขออนุมัติ", "APPROVE_CLAIM": "อนุมัติคำขอ", "ACKNOWLEDGE_CLAIM": "CFO รับทราบคำขอ", "RETURN_CLAIM": "ส่งกลับแก้ไข", "REJECT_CLAIM": "ไม่อนุมัติคำขอ",
     "PAY_CLAIM": "บันทึกจ่ายเงิน", "CONFIRM_RECEIPT": "ยืนยันรับเงิน", "RECORD_ACTUAL": "บันทึกยอดใช้จริง", "COMPLETE_CLAIM": "ปิดรายการ", "CANCEL_CLAIM": "ยกเลิกคำขอ (รับเงินคืนครบ)", "EXPORT_CLAIMS": "ส่งออกรายการคำขอเป็น Excel", "DELETE_CLAIM": "ลบคำขอ", "DELETE_ATTACHMENT": "ลบไฟล์แนบ",
@@ -14,7 +14,7 @@ AUDIT_ACTION_LABELS = {
     "CREATE_BU": "เพิ่ม BU", "UPDATE_BU": "แก้ไข BU", "DELETE_BU": "ลบ BU", "IMPORT_BUDGET_MASTER": "นำเข้า BU และ Budget", "CLEAR_TEST_CLAIMS": "ล้างคำขอทดสอบ",
     "DAILY_PENDING_REMINDER": "ส่งแจ้งเตือนงานค้างประจำวัน", "AUTO_CONFIRM_RECEIPT": "ระบบถือว่ารับเงินอัตโนมัติ",
     "UPDATE_SYSTEM_SETTINGS": "แก้ไขการตั้งค่าระบบ", "TEST_DATABASE": "ทดสอบฐานข้อมูล", "TEST_AD": "ทดสอบ AD Gateway", "TEST_TELEGRAM": "ทดสอบ Telegram Bot", "TEST_TELEGRAM_WEBHOOK": "ทดสอบ Telegram Webhook",
-    "SET_TELEGRAM_WEBHOOK": "เชื่อมต่อ Telegram Webhook", "UPDATE_SERVER_CONFIGURATION": "แก้ชุดค่าตั้งต้นเซิร์ฟเวอร์", "EXPORT_SERVER_CONFIGURATION": "ดาวน์โหลดชุดค่าตั้งต้นเซิร์ฟเวอร์",
+    "SET_TELEGRAM_WEBHOOK": "เชื่อมต่อ Telegram Webhook", "TELEGRAM_BOT_STARTED": "เปิดใช้งาน Telegram Bot", "UPDATE_SERVER_CONFIGURATION": "แก้ชุดค่าตั้งต้นเซิร์ฟเวอร์", "EXPORT_SERVER_CONFIGURATION": "ดาวน์โหลดชุดค่าตั้งต้นเซิร์ฟเวอร์",
 }
 
 
@@ -147,6 +147,18 @@ class AdminAuditLog(models.Model):
     @property
     def label(self):
         return AUDIT_ACTION_LABELS.get(self.action, self.action.replace("_", " ").title())
+
+
+class TelegramBotContact(models.Model):
+    """Verified private-chat contact for one bot; user IDs remain admin-managed."""
+    bot_key = models.CharField(max_length=64)
+    telegram_user_id = models.CharField(max_length=32)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    blocked_at = models.DateTimeField(null=True, blank=True)
+    last_update_id = models.BigIntegerField(default=-1)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=('bot_key', 'telegram_user_id'), name='unique_telegram_bot_contact')]
 
 
 class TransactionLog(models.Model):

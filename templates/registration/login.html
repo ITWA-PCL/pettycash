@@ -45,7 +45,7 @@
 
         {% if sso_enabled and not break_glass_active %}
           <div class="sso-launch-wrap">
-            <a href="{% url 'sso_login_redirect' %}" class="login-sso-button">
+            <a href="{% url 'sso_login_redirect' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="login-sso-button">
               <svg class="sso-shield" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 3v5c0 5-4 8-8 10-4-2-8-5-8-10V6l8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
               <span>เข้าสู่ระบบด้วย Window Asia SSO</span>
               <svg class="sso-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>

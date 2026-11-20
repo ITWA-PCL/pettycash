@@ -1,5 +1,52 @@
 # บันทึกส่งต่องาน: Petty Cash
 
+## ส่งงาน 20 พฤศจิกายน 2026 — อนุญาต push แล้ว
+
+- ผู้ใช้สั่ง “push เลย” หลังตรวจสรุปงานทั้งสามส่วน: เตือน Start Telegram เฉพาะบัญชีที่ Bot ติดต่อไม่ได้, แสดง LOGIN_SSO ในหน้า log และกลับเข้าคำขอเดิมหลังล็อกอิน
+- ส่งงานผ่าน process-flow และ PR เข้า main ตามขอบเขตเดิม ให้เจ้าของโครงการตรวจและ merge; รอบนี้ไม่ deploy หรือเปลี่ยน webhook บน VPS
+- ทดสอบรวม 440 รายการผ่าน และชุดลิงก์ล่าสุด 10 รายการผ่าน งานที่เหลือหลังนำขึ้น VPS: migrate core0029, เชื่อมต่อ Webhook หนึ่งครั้งเพื่อรับ message/my_chat_member และลอง SSO จริงจากลิงก์คำขอ
+
+## 20 พฤศจิกายน 2026 — แก้ลิงก์คำขอหลัง SSO ตามคำสั่งล่าสุด / ยังไม่ push
+
+- ผู้ใช้อนุญาตให้แก้เรื่องลิงก์แล้ว คำสั่งนี้แทนการพัก SSO next ก่อนหน้า แต่ยังคงคำสั่งห้าม push จนกว่าจะสั่ง
+- หน้า login ส่งปลายทางคำขอเดิมเข้าปุ่ม SSO เก็บใน session ผูกกับ state ของการเข้าสู่ระบบครั้งนั้น หลังสำเร็จกลับคำขอเดิมพร้อม query; ถ้าไม่มีปลายทางกลับหน้าแรกตามเดิม
+- ป้องกันลิงก์ออกนอกเว็บ/วนเข้าหน้าล็อกอิน ปลายทางใช้ครั้งเดียว เริ่ม SSO ใหม่ไม่รับลิงก์ค้างจากครั้งเก่า การตรวจ state/PKCE/JWT และสิทธิ์เข้าดูคำขอยังทำงานเดิม
+- ถ้าต้องเปลี่ยนรหัสผ่านหรือเพิ่มลายเซ็นก่อน ให้ทำขั้นตอนบังคับให้ครบแล้วกลับคำขอเดิม รองรับ AD/บัญชีภายในเดิม และเก็บปลายทางสำหรับลอง SSO ใหม่เมื่อแลก code ไม่สำเร็จ
+- เพิ่ม regression tests ใน apps/accounts/tests_return_target.py ใช้ SSO/AD จำลอง ไม่ติดต่อ IAM จริง ไม่ส่ง Telegram จริง ไม่เปลี่ยน webhook และไม่แก้ VPS; ชุดรวม 440 รายการผ่าน (147.559 วินาที) หลังเพิ่มตรวจเปิดคำขอจริง/บัญชีอื่นเปิดไม่ได้ รันชุดลิงก์ซ้ำ 10 รายการผ่าน (2.809 วินาที)
+
+## ปิดงาน 20 พฤศจิกายน 2026 — ยังไม่ push และพักเรื่อง SSO next
+
+- เพิ่มหลังสรุป: ผู้ใช้แจ้งเข้าSSOบนVPSไม่เห็นlog ตรวจโค้ดพบ exchange_code_and_login บันทึกเฉพาะ TransactionLog(category=ciam_sso/action=login_success) แต่หน้าoperations/overviewอ่านAdminAuditLog จึงไม่แสดงเหมือนAD/local ยังไม่ได้อ่านฐานVPSตรงๆเพื่อยืนยันจำนวนหรือสถานะlogย้อนหลัง
+- แก้localเฉพาะเพิ่ม log_event LOGIN_SSO หลังSSOสำเร็จ พร้อมlabel “เข้าสู่ระบบ (SSO)” ให้ค้นหา/กรองบนหน้าlogเดิมได้ คงTransactionLogละเอียดเดิม ไม่บันทึกtokenลงaudit ไม่เปลี่ยนprotocol/redirect/SSO nextที่ผู้ใช้พัก ไม่backfilllogย้อนหลัง/ไม่แก้VPS
+- ขยายเทสSSOเดิม: state/PKCEล้มเหลวไม่สร้างLOGIN_SSO, สำเร็จมีหนึ่งรายการผู้ใช้ตรง/targetตรง/ไม่ใส่JWT และหน้าadminกรองLOGIN_SSOแสดงได้ ชุดCentralIAMIntegrationTests13ผ่าน2.682s งานSSOlogนี้ยังไม่commit/push/deploy รวมกับfeatureTelegramที่ค้าง
+
+- ผู้ใช้สั่งสรุปวันนี้และยังไม่ให้ push งานค้างใน working tree ยังไม่ commit/push/deploy
+- ดึง main ล่าสุดเป็น eadc8e2 ตามผู้ใช้ รวมงานหัวหน้า CIAM2.13/password hardening และ PR9 ดีไซน์ของเราแล้ว ก่อนแก้ working tree สะอาด ระบบcheckและmigrate --checkผ่าน
+- งานที่แก้วันนี้: เตือน Telegram หลังloginเฉพาะบัญชีที่แอดมินกำหนดID+เปิดแจ้งเตือน และ Telegram ยืนยันว่าส่งไม่ได้จริง คนที่เคยStartแล้วแต่ไม่มีประวัติระบบใหม่จะไม่โดนเตือนล่วงหน้า ตรวจasyncแบบsendChatAction(typing)ไม่มีข้อความทดสอบอัตโนมัติ อาจเห็นBotกำลังพิมพ์ชั่วครู่ ผลส่งได้/ปุ่มแอดมินทดสอบสำเร็จ/ข้อความงานส่งสำเร็จบันทึกพร้อมใช้ ไม่ต้องให้คนเก่ากดStartซ้ำ Network/401/429/5xxไม่ตีความว่ายังไม่Start
+- ปิดแถบเตือนข้ามได้ทั้งsession และ reset เมื่อloginครั้งถัดไป รองรับlocal/AD/SSO คงแอดมินกรอกIDเอง ไม่autoassignหรือenableflag ไม่มีการเปลี่ยนIAM/securitypolicy มีcore0029ติดตามBotContact; สำรองและmigrate localแล้ว หลังขึ้นVPSต้องmigrateและเชื่อมWebhookใหม่1ครั้งเพื่อรับmessage/my_chat_memberนอกจากcallback_query
+- ผลทดสอบล่าสุด430testsผ่าน131.749s, Chromiumหน้าจริงคอม/มือถือ/สว่าง/มืด ตรวจไม่flashก่อนรู้ผล/เฉพาะส่งไม่ได้แสดง/ปิดแล้วไม่ค้างผ่าน ไม่มีการส่งTelegramจริง/สลับWebhook/แก้VPSโดยเครื่องมือ
+- ตรวจลิงก์Telegram: สร้างpathคำขอตามIDถูก, VPS https://pettycash.windowasia.com และlocalTunnel https://tsc17api.waapps.net; directloginมีnextอยู่แล้ว แต่SSOcallbackสำเร็จกลับdashboardแทนใบเดิม พบจากcode+จำลองlocal และanonymousVPSredirect ผู้ใช้ยังไม่มีลิงก์ข้อความจริงให้เทส และสั่งพักเรื่องนี้ไว้ก่อนอย่างชัดเจน ยังไม่แก้SSO next
+
+## 20 พฤศจิกายน 2026 — เตือนเชื่อมต่อ Telegram หลัง login (local ยังไม่ push)
+
+- ผู้ใช้ให้ตรวจลิงก์ Telegram บน VPS: anonymous GET production /claims/1/ ได้302ไป /login/?next=/claims/1/ และหน้าlogin200 (release eadc8e2) hidden nextถูกต้อง แต่SSO hrefไม่มีnext และ sso_callback_view สำเร็จกลับdashboardเสมอ จำลองcallbackสำเร็จในlocal(ไม่เรียกCIAM/ไม่เขียนDB)ยืนยัน/claims/1/→/ เป็นช่องว่างจริงสำหรับผู้ที่ยังไม่loginแล้วเลือกSSO ยังไม่ได้แก้ในรอบตรวจนี้
+- ตัวสร้างข้อความและปุ่มจ่ายเงินใช้reverse claim_detail กับclaim.id ถูกแบบเฉพาะใบ แต่ยังไม่มีhrefจากข้อความจริงของVPSเพื่อยืนยันค่าpublic_base_url/เลขใบ ผู้ใช้ถูกขอให้คัดลอกลิงก์1รายการ รอตรวจต่อ ไม่อนุมัติ/จ่ายเงิน/เปลี่ยนVPSในรอบนี้
+
+- ปรับล่าสุดตามผู้ใช้: ห้ามเตือนคนที่เคย Start แล้วเพียงเพราะไม่มีประวัติในระบบใหม่ เตือนเฉพาะ User ID ที่เปิดแจ้งเตือนและ Telegram ยืนยันส่งไม่ได้จริง ใช้ hidden banner ระหว่าง async POST ตรวจช่องทางด้วย sendChatAction(typing) ไม่มีข้อความทดสอบใหม่ อาจเห็น Bot กำลังพิมพ์ชั่วครู่ ตรวจเฉพาะบัญชีตัวเอง+CSRF/no-store ไม่หน่วงหน้า login และ cache ผลล้มเหลว120s/ไม่ทราบผล30s
+- ถ้าตรวจส่งได้ บันทึก contact พร้อมใช้งานและไม่แสดงคำเตือน ไม่บังคับคนเก่ากด Start ซ้ำ; timeout/401/429/5xx ไม่ตีความว่ายังไม่ Start จึงไม่เตือน กรณี missingID/disabled ไม่แสดงคำเตือน Start ตามขอบเขตใหม่
+- ผลปุ่มแอดมินทดสอบส่งข้อความสำเร็จบันทึกพร้อมใช้งานทันที และ sendMessage ปกติที่ Telegram ตอบ ok:true ก็ยืนยัน contact ได้ กลุ่ม/IDลบไม่บันทึกเป็นผู้ใช้ส่วนตัว หาก Telegram ระบุ chat not found/blocked/cannot initiate จึงบันทึกส่งไม่ได้ เก็บ network failure แยกและไม่ทำสถานะเก่าหาย แก้ telegram_api_request ให้ดู ok ใน JSON ไม่ถือ HTTP200 อย่างเดียวว่าส่งสำเร็จ
+- CSS/JS v20261120-02 Chromium 1440/390/320 สว่าง/มืดตรวจไม่กระพริบคำเตือนก่อนทราบผล ready/unknown ไม่เห็นคำเตือน เฉพาะneeds_startแสดง/ปิดได้และไม่มีoverlayค้าง ชุดเฉพาะ40testsผ่าน ยังไม่เรียก API ตรวจบัญชีจริงหรือส่งข้อความจริงจากเครื่องมือในรอบนี้
+- ตรวจรวมหลังปรับตามผู้ใช้ครบ430testsผ่าน131.749วินาที แก้ mocksเก่า2จุดให้คืน JSON ok:true ตามผลจริงTelegram ตรวจคอม/มือถือ/สว่าง/มืดผ่าน ไม่เปลี่ยนmodelเพิ่มจากcore0029เดิม ยังไม่push
+
+- ดึง main ล่าสุดตามผู้ใช้เป็น eadc8e2 (รวม PR9/10/12 และ CIAM2.13/password hardening ของหัวหน้า) working tree ก่อนแก้สะอาด, check/migrate --check ผ่าน, login200 ไม่แก้ security policy
+- ผู้ใช้ยืนยัน: แอดมินกรอก Telegram User ID เหมือนเดิม ไม่ผูกอัตโนมัติ; คำเตือนปิดข้ามได้ และเตือนใหม่เมื่อ login ครั้งถัดไป
+- เพิ่มแถบเตือนใน base หลัง login แยกยังไม่มี ID/ยังไม่เปิดแจ้งเตือน/ยังไม่ยืนยัน Bot ปุ่มเปิด Bot อ่าน username จาก getMe เฉพาะผู้ใช้คลิกและ cache เฉพาะ username 15นาที ไม่มี Telegram API call ระหว่าง render/login ปิดคำเตือนด้วย POST+CSRF และ session; user_logged_in reset การปิดทั้ง local/AD/SSO ไม่บังคับเชื่อมก่อนเข้าใช้ ไม่เตือนขัดหน้าบังคับเปลี่ยนรหัสผ่าน
+- เพิ่ม core0029/TelegramBotContact เก็บสถานะต่อ bot fingerprint+Telegram User ID ไม่แก้ข้อมูล User; /start ผ่าน webhook secret และ private from/chat ตรงกันบันทึกยืนยัน+audit, ยืนยันซ้ำไม่ส่งซ้ำ, หลัง commit ตอบรับใน Botหนึ่งข้อความ; private callback ยืนยันว่าติดต่อ Bot ได้, my_chat_member blocked กลับมาเตือน; ใช้ update_id กันซ้ำและ out-of-order ไม่ส่งคำยืนยันหรือข้อความจริงในรอบพัฒนา
+- ปุ่มเปิด Bot ไป t.me/<username>?start=notifications ไม่บรรจุ User ID หรือ token ไม่ออโต้เปิดรับแจ้งเตือน/ไม่เปลี่ยน ID ถ้าแอดมินเปลี่ยน ID หรือ Bot credential ต้องมีหลักฐานของค่าปัจจุบัน ผู้ใช้เก่าที่ Start ก่อนมี feature อาจต้องกด Start อีกครั้งเพื่อยืนยันสถานะ ไม่อ้างว่าทราบประวัติย้อนหลัง
+- คำสั่ง set_telegram_webhook เปลี่ยน allowed_updates เป็น callback_query/message/my_chat_member โดยคง approval callbacks เดิม หลังนำขึ้น VPS ต้อง migrate และกด “เชื่อมต่อ Webhook” ในตั้งค่าระบบหนึ่งครั้งเพื่อเริ่มรับ Start; รอบนี้ไม่ได้เรียก setWebhook/ไม่สลับปลายทาง Bot
+- สำรอง localDB เป็น output/telegram-reminder-20261120/before-telegram-reminder-20261120.dump (นอกGit) แล้ว apply core0029 local แล้ว ผลทดสอบชุดเกี่ยวข้อง33ผ่าน, ชุดรวม423ผ่าน123.127วินาที, model/migration check ไม่มีตกค้าง, diff check ผ่าน
+- Chromium real dashboard templates 1440/390/320 สว่าง/มืดครบ3สถานะ ไม่ล้น ปิดแล้ว POSTครั้งเดียว ไม่มี loading overlayค้าง/ไม่กลับมาในหน้าอื่น errorกดใหม่ได้ ตรวจภาพแล้ว output/petty-ui-check/telegram-reminder-390-light-20261120.png และ -dark- ไม่ทดสอบ Start Bot จริงเพราะจะต้อง register webhook ส่วนของenvironmentนั้นก่อน ยังไม่ commit/push/deploy
+
 ## 18 พฤศจิกายน 2026 — อัปเกรดระบบรองรับ Central IAM Standard v2.13.0 (Sec1)
 
 - **ขอบเขตงาน & ฐานโค้ด:**

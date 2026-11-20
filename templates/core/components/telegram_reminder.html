@@ -1,0 +1,14 @@
+<aside class="telegram-start-reminder" data-telegram-reminder aria-labelledby="telegram-reminder-heading"{% if telegram_reminder == 'checking' %} hidden data-telegram-check-url="{% url 'telegram_check_connection' %}"{% endif %}>
+  <span class="telegram-reminder-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m21 3-5 18-5-7-8-4 18-7Z"/><path d="m11 14 5-6"/></svg></span>
+  <div class="telegram-reminder-copy">
+    <strong id="telegram-reminder-heading">รับการแจ้งเตือนผ่าน Telegram</strong>
+    <p>Bot ยังส่งข้อความถึงบัญชีนี้ไม่ได้ กรุณาเปิด Bot แล้วกด Start หรือปลดบล็อก เพื่อรับการแจ้งเตือนคำขอและงานอนุมัติ</p>
+    <a class="button button-secondary button-compact" href="{% url 'telegram_open_bot' %}" target="_blank" rel="noopener" data-no-partial-navigation>เปิด Telegram Bot</a>
+    <small>กด Start แล้วกลับมาที่เว็บและรีเฟรช หากยังขึ้นเตือน กรุณาให้ผู้ดูแลตรวจ Telegram User ID และ Webhook</small>
+    <span class="telegram-reminder-error" role="status" hidden>ปิดคำเตือนไม่สำเร็จ กรุณาลองอีกครั้ง</span>
+  </div>
+  <form method="post" action="{% url 'telegram_dismiss_reminder' %}" data-telegram-reminder-dismiss>
+    {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button type="submit" class="telegram-reminder-close" aria-label="ปิดคำเตือน Telegram จนกว่าจะเข้าสู่ระบบครั้งถัดไป" title="เตือนอีกครั้งเมื่อเข้าสู่ระบบครั้งถัดไป">×</button>
+  </form>
+</aside>

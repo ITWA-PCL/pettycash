@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from apps.core.system_settings import get_system_settings
+from .return_target import remember_setup_target
 
 
 def _is_m2m_directory_request(request) -> bool:
@@ -81,6 +82,7 @@ class PasswordRotationMiddleware:
                         )
                         response["Cache-Control"] = "no-store"
                         return response
+                    remember_setup_target(request)
                     return redirect("forced_password_change")
 
         return self.get_response(request)
@@ -107,5 +109,6 @@ class SignatureOnboardingMiddleware:
             and not request.path.startswith(("/static/", "/media/", "/api/"))
             and get_system_settings().require_signature_on_first_login
         ):
+            remember_setup_target(request)
             return redirect("signature_setup")
         return self.get_response(request)
