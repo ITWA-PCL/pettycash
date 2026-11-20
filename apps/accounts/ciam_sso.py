@@ -15,7 +15,8 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.core.audit import record_transaction_log
+from apps.accounts.return_target import remember_sso_target
+from apps.core.audit import log_event, record_transaction_log
 from apps.core.system_settings import get_system_settings
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ def build_sso_authorize_url(request: HttpRequest, redirect_uri: str) -> Tuple[st
     # Save verifier and state in session for PKCE validation
     request.session["sso_code_verifier"] = verifier
     request.session["sso_state"] = state
+    remember_sso_target(request, state)
 
     params = {
         "response_type": "code",
@@ -347,5 +349,6 @@ def exchange_code_and_login(
         triggered_by=f"user:{username}",
     )
 
+    log_event(user, 'LOGIN_SSO', user.username, 'เข้าสู่ระบบผ่าน Central IAM SSO')
     return user, None
 

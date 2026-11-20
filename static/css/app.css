@@ -173,6 +173,28 @@ html.dark-mode .history-icon { background: #18385a; color: #8dc7ff; }.dark-mode 
 
 .settings-retention-field { max-width: calc(50% - .6rem); margin: -.25rem 0 1.5rem; padding: .9rem 1rem; border: 1px solid #dce7f3; border-radius: 12px; background: #f8fbff; }.settings-retention-field input { max-width: 180px; }.form-grid > .form-field { align-content: start; }
 .settings-auto-receive-field { margin-top: 1.25rem; }
+.telegram-start-reminder { display: flex; align-items: flex-start; gap: .9rem; margin-bottom: 1.25rem; padding: 1rem; border: 1px solid #bed7ef; border-radius: 14px; background: #f0f7ff; color: var(--slate-900); }
+.telegram-start-reminder[hidden] { display: none; }
+.telegram-reminder-icon { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border-radius: 11px; background: #dceeff; color: #1769c2; }
+.telegram-reminder-icon svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+.telegram-reminder-copy { flex: 1; min-width: 0; }
+.telegram-reminder-copy strong { color: var(--blue-900); font-size: .95rem; }
+.telegram-reminder-copy p { margin: .25rem 0 .5rem; font-size: .83rem; line-height: 1.7; }
+.telegram-reminder-copy small { display: block; margin-top: .55rem; color: var(--slate-600); font-size: .73rem; line-height: 1.6; }
+.telegram-reminder-close { display: grid; place-items: center; width: 44px; height: 44px; margin: -.4rem -.4rem 0 0; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--slate-600); font: inherit; font-size: 1.6rem; cursor: pointer; }
+.telegram-reminder-close:hover { background: #dceeff; }
+.telegram-reminder-close:focus-visible { outline: 2px solid #1769c2; outline-offset: 1px; }
+.telegram-reminder-error { display: block; margin-top: .5rem; color: #a12222; font-size: .8rem; }
+.telegram-reminder-error[hidden] { display: none; }
+html.dark-mode .telegram-start-reminder { border-color: #345d85; background: #142b44; }
+html.dark-mode .telegram-reminder-icon, html.dark-mode .telegram-reminder-close:hover { background: #1c3d5f; color: #a5d4ff; }
+html.dark-mode .telegram-reminder-error { color: #ffb7b7; }
+@media (max-width: 520px) {
+  .telegram-start-reminder { gap: .55rem; padding: .8rem; }
+  .telegram-reminder-icon { display: none; }
+  .telegram-reminder-copy .button { display: inline-flex; align-items: center; min-height: 44px; }
+  .telegram-reminder-copy strong { font-size: .86rem; }
+}
 select:not([multiple]):not(.searchable-native) { appearance: none; -webkit-appearance: none; padding-right: 2.5rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2360708a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .8rem center; background-size: 16px; }
 html.dark-mode select:not([multiple]):not(.searchable-native) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23abc6e4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 .sso-launch-wrap { display: grid; gap: 1.1rem; min-width: 0; }

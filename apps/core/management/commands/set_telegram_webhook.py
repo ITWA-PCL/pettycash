@@ -22,7 +22,7 @@ class Command(BaseCommand):
             {
                 "url": webhook_url,
                 "secret_token": telegram_secret(),
-                "allowed_updates": ["callback_query"],
+                "allowed_updates": ["callback_query", "message", "my_chat_member"],
             },
         )
         if not configured:

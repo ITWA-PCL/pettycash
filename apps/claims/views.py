@@ -676,8 +676,16 @@ def telegram_webhook(request):
     if not secret or not compare_digest(request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""), secret):
         return HttpResponse(status=403)
     try:
-        callback = json.loads(request.body).get("callback_query")
+        update = json.loads(request.body)
+        if not isinstance(update, dict):
+            return HttpResponse(status=400)
+        callback = update.get("callback_query")
     except (TypeError, ValueError, json.JSONDecodeError):
+        return HttpResponse(status=400)
+    from apps.core.telegram_connection import handle_contact_update
+    if handle_contact_update(update):
+        return HttpResponse(status=200)
+    if callback and not isinstance(callback, dict):
         return HttpResponse(status=400)
     if not callback:
         return HttpResponse(status=200)

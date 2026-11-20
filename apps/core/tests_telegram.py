@@ -19,6 +19,7 @@ class TelegramNotificationTests(TestCase):
     @patch("apps.core.telegram.requests.post")
     def test_sends_direct_message_with_claim_link(self, post):
         post.return_value = Mock()
+        post.return_value.json.return_value = {'ok': True}
         self.assertTrue(send_telegram_notification(self.user, "มีคำขอรออนุมัติ", "กรุณาตรวจสอบ", "/claims/1/"))
         self.assertEqual(post.call_args.kwargs["json"]["chat_id"], "123456789")
         self.assertEqual(post.call_args.kwargs["json"]["parse_mode"], "HTML")
@@ -37,6 +38,7 @@ class TelegramNotificationTests(TestCase):
     @patch("apps.core.telegram.requests.post")
     def test_removes_buttons_from_callback_message(self, post):
         post.return_value = Mock()
+        post.return_value.json.return_value = {'ok': True}
 
         self.assertTrue(remove_telegram_callback_keyboard({"message": {"chat": {"id": 123}, "message_id": 456}}))
 
@@ -48,6 +50,7 @@ class TelegramNotificationTests(TestCase):
     @patch("apps.core.telegram.requests.post")
     def test_sends_event_to_overview_group(self, post):
         post.return_value = Mock()
+        post.return_value.json.return_value = {'ok': True}
         self.assertTrue(send_telegram_group_notification("จ่ายเงินแล้ว", "รายการทดสอบ", "/claims/1/"))
         self.assertEqual(post.call_args.kwargs["json"]["chat_id"], "-100123456")
         self.assertIn('href="https://pettycash.example/claims/1/"', post.call_args.kwargs["json"]["text"])

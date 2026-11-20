@@ -73,6 +73,7 @@ class WebConfigurationTests(TestCase):
     @patch('apps.core.telegram.requests.post')
     def test_database_token_group_and_links_take_effect_without_restart(self, post):
         post.return_value = Mock()
+        post.return_value.json.return_value = {'ok': True}
         self.config.public_base_url = 'https://pettycash.windowasia.com'
         self.config.telegram_bot_token = '123:DatabaseToken'
         self.config.telegram_group_chat_id = '-100777'
@@ -86,6 +87,7 @@ class WebConfigurationTests(TestCase):
     @patch('apps.core.telegram.requests.post')
     def test_webhook_registration_uses_web_settings_and_no_pending_drop(self, post):
         post.return_value = Mock()
+        post.return_value.json.return_value = {'ok': True}
         self.config.public_base_url = 'https://pettycash.windowasia.com'
         self.config.telegram_bot_token = '123:DatabaseToken'
         self.config.telegram_webhook_secret = 'DatabaseSecret'
